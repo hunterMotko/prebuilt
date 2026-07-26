@@ -1,0 +1,11 @@
+prebuilt*
+.DS_Store
+tmp/
+.env
+notes.txt
+reviews.txt
+backups/
+
+AUDIT_CHECKLIST.md
+# Docker bind-mount target: the deployed SQLite database and uploaded photos.
+data/

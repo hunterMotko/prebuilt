@@ -1,0 +1,99 @@
+{{define "contact.html"}}
+<section class="section contact-section" id="contact">
+    <div class="container">
+        <div class="section-header">
+            <h2 class="section-title">Get a <span class="red-text">Free Quote</span></h2>
+            <p class="section-subtitle">Fill out the form and we'll reach out within one business day.</p>
+        </div>
+
+        <div class="contact-wrap">
+            <form
+                class="contact-form"
+                hx-post="/contact"
+                hx-target="#form-response"
+                hx-swap="outerHTML"
+                hx-indicator="#form-spinner"
+            >
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="name">Full Name <span class="req">*</span></label>
+                        <input type="text" id="name" name="name" placeholder="Jane Smith" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">Phone Number <span class="req">*</span></label>
+                        <input type="tel" id="phone" name="phone" placeholder="(555) 000-0000" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email Address <span class="req">*</span></label>
+                    <input type="email" id="email" name="email" placeholder="jane@example.com" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="style">Shed Style <span class="req">*</span></label>
+                        <select id="style" name="style" required>
+                            <option value="" disabled selected>Select a style</option>
+                            <option value="Gambrel (Barn)">Gambrel (Barn)</option>
+                            <option value="Gable">Gable</option>
+                            <option value="Skillion">Skillion</option>
+                            <option value="Not sure yet">Not sure yet</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="size">Size of Interest <span class="req">*</span></label>
+                        <select id="size" name="size" required>
+                            <option value="" disabled selected>Select a size</option>
+                            <option value="8x8">8&times;8</option>
+                            <option value="8x12">8&times;12</option>
+                            <option value="10x12">10&times;12</option>
+                            <option value="10x16">10&times;16</option>
+                            <option value="10x20">10&times;20</option>
+                            <option value="12x16">12&times;16</option>
+                            <option value="12x20">12&times;20</option>
+                            <option value="12x24">12&times;24</option>
+                            <option value="14x24">14&times;24</option>
+                            <option value="14x28">14&times;28</option>
+                            <option value="16x24">16&times;24</option>
+                            <option value="16x32">16&times;32</option>
+                            <option value="Custom">Custom / Not sure</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="details">Details &amp; Add-Ons</label>
+                    <textarea id="details" name="details" rows="5" maxlength="2000"
+                        placeholder="Tell us about your project — intended use, preferred door placement, add-ons you're interested in, or any other details."></textarea>
+                </div>
+
+                <div id="form-response"></div>
+
+                <div class="form-submit-row">
+                    <span id="form-spinner" class="htmx-indicator spinner"></span>
+                    <button type="submit" class="btn btn-primary btn-lg">Send My Request</button>
+                </div>
+            </form>
+
+            <div class="contact-sidebar">
+                <div class="contact-info-block">
+                    <h3>Prefer to call?</h3>
+                    <!-- REPLACE: insert real phone number -->
+                    <a href="tel:+19893879233" class="contact-phone">(989)-387-9233</a>
+                    <p>Mon–Sat, 8am–6pm</p>
+                </div>
+                <div class="contact-info-block">
+                    <h3>What Happens Next?</h3>
+                    <ol class="contact-steps">
+                        <li>We review your request</li>
+                        <li>We call or email with a price</li>
+                        <li>You approve — we schedule delivery</li>
+                        <li>Your shed is set and ready</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{{end}}

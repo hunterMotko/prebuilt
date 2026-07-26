@@ -1,0 +1,97 @@
+# nginx server block for Prebuilt Sheds LLC.
+#
+# Install on the VPS at /etc/nginx/sites-available/prebuiltshedsllc.com and
+# symlink into sites-enabled/, then:
+#     sudo nginx -t && sudo systemctl reload nginx
+#
+# TLS: run certbot AFTER this file is in place and the domain's A record points
+# at the server:
+#     sudo certbot --nginx -d prebuiltshedsllc.com -d www.prebuiltshedsllc.com
+# Certbot rewrites this file to add the ssl_certificate lines, the :443 listener,
+# and an HTTP→HTTPS redirect, and installs its own renewal timer. Everything
+# below is what certbot does NOT set for you.
+
+# ─── Canonical host ───────────────────────────────────────────────────────────
+# The bare domain is canonical (it's what robots.txt and sitemap.xml already
+# point at), so www 301s to it. Serving both without a redirect would split
+# search ranking between two hostnames treated as duplicate content.
+# This block targets https:// because certbot will have added TLS by the time
+# it matters — run certbot for BOTH -d names so this host gets a cert too.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name www.prebuiltshedsllc.com;
+    return 301 https://prebuiltshedsllc.com$request_uri;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name prebuiltshedsllc.com;
+
+    # ─── THE ONE THAT WILL BITE YOU ───────────────────────────────────────────
+    # nginx's default client_max_body_size is 1 MB. The admin photo upload
+    # accepts up to 8 MB per photo and 12 photos per shed (a 40 MB request
+    # limit in the app), so without this line nginx rejects real uploads with
+    # a 413 before the request ever reaches the app — and the app's own
+    # validation and error messages never get a chance to run.
+    client_max_body_size 40m;
+
+    # ─── Proxy headers ────────────────────────────────────────────────────────
+    # X-Forwarded-For is what the app's TRUST_PROXY=true setting reads to
+    # recover the real client IP. Without it the per-IP rate limiter treats all
+    # traffic as one client. X-Forwarded-Proto is what tells the app the
+    # original request was HTTPS — it drives the HSTS header.
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        # Photo uploads on a slow connection can legitimately take minutes;
+        # nginx's 60s default would cut them off mid-transfer. Matches the
+        # app's own 5-minute read/write timeouts.
+        proxy_connect_timeout 10s;
+        proxy_send_timeout    300s;
+        proxy_read_timeout    300s;
+
+        # Stream uploads through instead of buffering the whole body to disk
+        # first. Keeps large photo POSTs off the VPS's disk.
+        proxy_request_buffering off;
+    }
+
+    # ─── Deliberately NOT set here ────────────────────────────────────────────
+    # Strict-Transport-Security: the app already emits this (main.go's
+    #   SecureWithConfig, triggered by the X-Forwarded-Proto header above).
+    #   Adding it here too sends the header twice.
+    # X-Frame-Options / X-Content-Type-Options / X-XSS-Protection: also already
+    #   set by the app. Duplicating them here is how you end up with
+    #   contradictory values that are painful to debug.
+
+    # ─── Optional: let nginx serve static assets directly ─────────────────────
+    # Faster than proxying, but there are two real trade-offs, so it's off by
+    # default:
+    #   1. It bypasses the app's Cache-Control: no-cache on /public/, so you
+    #      must set caching here instead or browsers will serve stale CSS/JS
+    #      after a deploy (this exact problem already cost us a debugging round).
+    #   2. The files live inside the container, so this needs public/ bind
+    #      mounted onto the host, which partly defeats shipping assets in the
+    #      image.
+    # Uploaded photos are the better candidate, since those are already a host
+    # bind mount at ./data/uploads:
+    #
+    # location /public/images/inventory/ {
+    #     alias /srv/prebuilt/data/uploads/;
+    #     expires 30d;
+    #     add_header Cache-Control "public";
+    #     access_log off;
+    # }
+
+    gzip on;
+    gzip_types text/css application/javascript image/svg+xml application/xml;
+    gzip_min_length 1024;
+}

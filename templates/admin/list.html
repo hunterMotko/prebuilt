@@ -1,0 +1,52 @@
+{{define "admin_list.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="icon" type="image/png" href="/public/images/pbs-logo.png">
+    <link rel="stylesheet" href="/public/css/style.css">
+    <meta name="csrf-token" content="{{.CSRFToken}}">
+    <script src="/public/js/htmx.min.js" defer></script>
+    <script>
+        document.addEventListener('htmx:configRequest', function (e) {
+            e.detail.headers['X-CSRF-Token'] = document.querySelector('meta[name="csrf-token"]').content;
+        });
+    </script>
+</head>
+<body class="admin-body">
+
+<div class="container admin-shell">
+    <div class="admin-header">
+        <h1 class="section-title">Inventory <span class="red-text">Admin</span></h1>
+        <a href="/admin/inventory/new" class="btn btn-primary btn-sm">+ New Item</a>
+    </div>
+
+    <div class="admin-table-wrap">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Lot</th>
+                    <th>Size</th>
+                    <th>Style</th>
+                    <th>Colors</th>
+                    <th>Price</th>
+                    <th>Photos</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Cards}}{{template "admin_item_row.html" .}}{{else}}
+                <tr><td colspan="9" class="admin-empty">No inventory items yet.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+</body>
+</html>
+{{end}}

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <meta name="description" content="Prebuilt Sheds LLC — Already-built sheds ready for pickup or delivery today.">
+    <link rel="icon" type="image/png" href="/public/images/pbs-logo.png">
+    <link rel="stylesheet" href="/public/css/style.css">
+    <script src="/public/js/htmx.min.js" defer></script>
+    <script src="/public/js/main.js" defer></script>
+</head>
+<body>
+
+{{template "nav.html" .}}
+
+<section class="section instock-section" id="instock">
+    <div class="container">
+        <div class="section-header">
+            <h2 class="section-title">In <span class="red-text">Stock</span> Now</h2>
+            <p class="section-subtitle">Already built and sitting on one of our lots — ready faster than a custom order.</p>
+        </div>
+
+        {{if .Empty}}
+        <p class="instock-empty">No sheds currently in stock — check back soon!</p>
+        {{else}}
+        <div class="pricing-tabs">
+            <button class="pricing-tab active" data-tab="all">All</button>
+            <button class="pricing-tab" data-tab="in_stock">In Stock</button>
+            <button class="pricing-tab" data-tab="on_hold">On Hold</button>
+            <button class="pricing-tab" data-tab="sold">Sold</button>
+        </div>
+
+        <div class="pricing-pane active" id="tab-all">
+            {{range .All}}
+            <h3 class="lot-heading">Lot {{.Lot}}</h3>
+            <div class="instock-grid">
+                {{range .Cards}}{{template "instock_card.html" .}}{{end}}
+            </div>
+            {{end}}
+        </div>
+
+        <div class="pricing-pane" id="tab-in_stock">
+            {{if .InStock}}
+            {{range .InStock}}
+            <h3 class="lot-heading">Lot {{.Lot}}</h3>
+            <div class="instock-grid">
+                {{range .Cards}}{{template "instock_card.html" .}}{{end}}
+            </div>
+            {{end}}
+            {{else}}
+            <p class="instock-empty">Nothing in stock right now.</p>
+            {{end}}
+        </div>
+
+        <div class="pricing-pane" id="tab-on_hold">
+            {{if .OnHold}}
+            {{range .OnHold}}
+            <h3 class="lot-heading">Lot {{.Lot}}</h3>
+            <div class="instock-grid">
+                {{range .Cards}}{{template "instock_card.html" .}}{{end}}
+            </div>
+            {{end}}
+            {{else}}
+            <p class="instock-empty">Nothing on hold right now.</p>
+            {{end}}
+        </div>
+
+        <div class="pricing-pane" id="tab-sold">
+            {{if .Sold}}
+            {{range .Sold}}
+            <h3 class="lot-heading">Lot {{.Lot}}</h3>
+            <div class="instock-grid">
+                {{range .Cards}}{{template "instock_card.html" .}}{{end}}
+            </div>
+            {{end}}
+            {{else}}
+            <p class="instock-empty">Nothing sold yet.</p>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+</section>
+
+{{template "footer.html" .}}
+
+<!-- Interest modal (one shared instance, populated per-card by JS) -->
+<div class="modal" id="interestModal" aria-hidden="true">
+    <div class="modal-content">
+        <button class="modal-close" id="interestModalClose" aria-label="Close">&times;</button>
+        <h3 class="modal-title">Ask About This Shed</h3>
+        <p class="modal-summary" id="interestSummary"></p>
+
+        <form
+            class="contact-form"
+            hx-post="/instock/interest"
+            hx-target="#interest-form-response"
+            hx-swap="outerHTML"
+            hx-indicator="#interest-form-spinner"
+        >
+            <input type="hidden" name="item_id" id="interestItemId" value="">
+
+            <div class="form-group">
+                <label for="interest-name">Full Name <span class="req">*</span></label>
+                <input type="text" id="interest-name" name="name" placeholder="Jane Smith" required>
+            </div>
+            <div class="form-group">
+                <label for="interest-phone">Phone Number <span class="req">*</span></label>
+                <input type="tel" id="interest-phone" name="phone" placeholder="(555) 000-0000" required>
+            </div>
+            <div class="form-group">
+                <label for="interest-email">Email Address <span class="req">*</span></label>
+                <input type="email" id="interest-email" name="email" placeholder="jane@example.com" required>
+            </div>
+            <div class="form-group">
+                <label for="interest-message">Message</label>
+                <textarea id="interest-message" name="message" rows="4" maxlength="2000" placeholder="Any questions or timing details?"></textarea>
+            </div>
+
+            <div id="interest-form-response"></div>
+
+            <div class="form-submit-row">
+                <span id="interest-form-spinner" class="htmx-indicator spinner"></span>
+                <button type="submit" class="btn btn-primary btn-lg">Send Inquiry</button>
+            </div>
+        </form>
+    </div>
+</div>
+<div class="modal-backdrop" id="interestModalBackdrop"></div>
+
+</body>
+</html>
+
+{{define "instock_card.html"}}
+<div class="instock-card">
+    <div class="instock-img-wrap"{{if gt (len .Images) 1}} data-carousel{{end}}>
+        {{if .Images}}
+        {{range $i, $img := .Images}}
+        <img src="/public/images/inventory/{{$.ID}}/{{$img.Filename}}" alt="{{$.Label}}" class="instock-img carousel-slide{{if eq $i 0}} active{{end}}">
+        {{end}}
+        {{if gt (len .Images) 1}}
+        <button class="carousel-btn carousel-prev" aria-label="Previous photo">&#8249;</button>
+        <button class="carousel-btn carousel-next" aria-label="Next photo">&#8250;</button>
+        <div class="carousel-dots">
+            {{range $i, $img := .Images}}<span class="carousel-dot{{if eq $i 0}} active{{end}}"></span>{{end}}
+        </div>
+        {{end}}
+        {{else}}
+        <div class="placeholder-img instock-img"><span>No photo yet</span></div>
+        {{end}}
+        {{if eq .Status "sold"}}<div class="sold-ribbon"><span>SOLD</span></div>{{end}}
+        <div class="status-badge status-badge--{{if eq .Status "in_stock"}}in-stock{{else if eq .Status "on_hold"}}on-hold{{else}}sold{{end}}">
+            {{if eq .Status "in_stock"}}In Stock{{else if eq .Status "on_hold"}}On Hold{{else}}Sold{{end}}
+        </div>
+    </div>
+    <div class="instock-card-body">
+        <h3 class="instock-title">{{.Width}}&times;{{.Length}} {{.Style}}</h3>
+        <p class="instock-lot">Lot {{.Lot}}</p>
+        <div class="instock-colors">
+            <span class="color-swatch" style="background:{{.SidingHex}}" title="Siding: {{.SidingName}}"></span>
+            <span class="color-swatch" style="background:{{.RoofHex}}" title="Roof: {{.RoofName}}"></span>
+        </div>
+        {{if .PriceDisplay}}
+        <p class="instock-price">{{.PriceDisplay}}</p>
+        {{else}}
+        <p class="instock-price instock-price--call">Call for price</p>
+        {{end}}
+        <button
+            type="button"
+            class="btn btn-outline btn-sm interest-btn"
+            data-item-id="{{.ID}}"
+            data-item-summary="{{.Width}}x{{.Length}} {{.Style}} — Lot {{.Lot}}"
+        >Ask About This One</button>
+    </div>
+</div>
+{{end}}

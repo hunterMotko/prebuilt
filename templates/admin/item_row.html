@@ -1,0 +1,34 @@
+{{define "admin_item_row.html"}}
+<tr id="item-{{.ID}}">
+    <td>{{.Code}}</td>
+    <td>{{.Lot}}</td>
+    <td>{{.Width}}&times;{{.Length}}</td>
+    <td>{{.Style}}</td>
+    <td>
+        <span class="color-swatch" style="background:{{.SidingHex}}" title="Siding: {{.SidingName}}"></span>
+        <span class="color-swatch" style="background:{{.RoofHex}}" title="Roof: {{.RoofName}}"></span>
+    </td>
+    <td>{{if .PriceDisplay}}{{.PriceDisplay}}{{else}}&mdash;{{end}}</td>
+    <td>{{len .Images}}</td>
+    <td>
+        <form hx-post="/admin/inventory/{{.ID}}/status" hx-target="closest tr" hx-swap="outerHTML">
+            <select name="status" onchange="this.form.requestSubmit()">
+                <option value="in_stock" {{if eq .Status "in_stock"}}selected{{end}}>In Stock</option>
+                <option value="on_hold" {{if eq .Status "on_hold"}}selected{{end}}>On Hold</option>
+                <option value="sold" {{if eq .Status "sold"}}selected{{end}}>Sold</option>
+            </select>
+        </form>
+    </td>
+    <td class="admin-row-actions">
+        <a href="/admin/inventory/{{.ID}}/edit" class="btn btn-outline btn-sm">Edit</a>
+        <button
+            type="button"
+            class="btn btn-outline btn-sm"
+            hx-delete="/admin/inventory/{{.ID}}"
+            hx-target="closest tr"
+            hx-swap="outerHTML"
+            hx-confirm="Delete this item permanently? This cannot be undone."
+        >Delete</button>
+    </td>
+</tr>
+{{end}}

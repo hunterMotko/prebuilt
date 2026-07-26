@@ -1,0 +1,64 @@
+# Deployment stack for a single VPS. One service — the Go app. TLS and the
+# public-facing web server are nginx on the host, installed outside Docker, so
+# nothing here touches ports 80/443. See deploy/nginx.conf.example for the
+# server block that fronts this, and note the client_max_body_size line there:
+# nginx's 1 MB default silently rejects admin photo uploads with a 413.
+#
+# FIRST-RUN SETUP on the VPS:
+#   1. cp .env.example .env   and fill in real values
+#      (ADMIN_PASS strong, real SMTP_*, real CONTACT_EMAIL)
+#   2. mkdir -p data/uploads
+#   3. sudo chown -R 10001:10001 data
+#      ^ REQUIRED. Bind mounts keep the *host* directory's ownership (unlike
+#        named volumes, which inherit the image's), and the container runs as
+#        uid 10001. Skip this and the app exits on startup unable to write.
+#   4. docker compose up -d --build
+#   5. configure nginx + certbot on the host, then reload nginx
+#
+# Bind mounts (./data) rather than named volumes so the database and photos stay
+# directly reachable from the host — that's what makes backups and the sqlite3
+# color-table edits practical.
+#
+# KNOWN FOLLOW-UP: scripts/backup.sh still expects the pre-Docker layout
+# (./prebuilt.db and public/images/inventory/). Under this compose file those
+# live at ./data/prebuilt.db and ./data/uploads/, so its paths need updating
+# before it protects anything.
+
+services:
+  app:
+    build: .
+    image: prebuilt-sheds:latest
+    container_name: prebuilt-sheds
+    restart: unless-stopped
+
+    env_file: .env
+    environment:
+      PORT: 8080
+      DB_PATH: /data/prebuilt.db
+      # Required behind nginx. Without it the per-IP form rate limiter sees
+      # only nginx's address and would throttle every visitor collectively as
+      # a single client — real customers would start getting 429s.
+      TRUST_PROXY: "true"
+      # Safe because nginx terminates TLS and the site is HTTPS-only. Marks
+      # the admin CSRF cookie Secure so it never crosses plain HTTP.
+      COOKIE_SECURE: "true"
+
+    volumes:
+      - ./data:/data
+      - ./data/uploads:/app/public/images/inventory
+
+    # Bound to 127.0.0.1 on purpose, not just "8080:8080". Docker writes its own
+    # iptables rules that bypass ufw/firewalld, so a plain port mapping would
+    # publish the app straight to the internet on :8080 — unencrypted and
+    # skipping nginx entirely — even with the firewall "closed". This keeps it
+    # reachable only from the host, which is all nginx needs.
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    logging:
+      # Without limits, container logs grow until they fill the disk — which on
+      # a small VPS also takes down SQLite writes.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

@@ -1,0 +1,15 @@
+{{define "admin_photo_thumb.html"}}
+<div class="admin-photo-thumb">
+    <img src="/public/images/inventory/{{.InventoryItemID}}/{{.Filename}}" alt="{{.Category}} photo">
+    <span class="admin-photo-category">{{.Category}}</span>
+    <button
+        type="button"
+        class="admin-photo-delete"
+        hx-delete="/admin/images/{{.ID}}"
+        hx-target="closest .admin-photo-thumb"
+        hx-swap="outerHTML"
+        hx-confirm="Remove this photo?"
+        aria-label="Remove photo"
+    >&times;</button>
+</div>
+{{end}}

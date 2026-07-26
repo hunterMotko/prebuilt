@@ -1,0 +1,31 @@
+{{define "layout.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <meta name="description" content="Prebuilt Sheds LLC — Quality gambrel, gable, and skillion sheds built to last.">
+    <link rel="icon" type="image/png" href="/public/images/pbs-logo.png">
+    <link rel="stylesheet" href="/public/css/style.css">
+    <script src="/public/js/htmx.min.js" defer></script>
+    <script src="/public/js/main.js" defer></script>
+</head>
+<body>
+
+{{template "nav.html" .}}
+
+{{template "hero.html" .}}
+{{template "styles.html" .}}
+{{template "gallery.html" .}}
+{{template "pricing.html" .}}
+{{template "specs.html" .}}
+{{template "addons.html" .}}
+{{template "testimonials.html" .}}
+{{template "contact.html" .}}
+
+{{template "footer.html" .}}
+
+</body>
+</html>
+{{end}}

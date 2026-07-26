@@ -1,0 +1,36 @@
+# Keep secrets and local state out of the build context entirely. Anything
+# listed here can't be copied into an image even by accident, and it also keeps
+# the context small so builds stay fast.
+
+# Secrets — never bake credentials into an image layer.
+.env
+.env.*
+!.env.example
+
+# Local database + its SQLite sidecar files. The deployed database lives in a
+# mounted volume; copying a dev copy in would shadow it on first boot.
+prebuilt.db
+prebuilt.db-*
+prebuilt*
+
+# Local backups and uploaded photos — these belong in volumes, not the image.
+backups/
+data/
+public/images/inventory/
+
+# Build/tooling artifacts.
+tmp/
+*.test
+.git/
+.gitignore
+.DS_Store
+
+# Docs and scratch notes aren't needed at runtime.
+AUDIT_CHECKLIST.md
+CLAUDE.md
+shed-options.md
+notes.txt
+reviews.txt
+Dockerfile
+docker-compose.yml
+.dockerignore
