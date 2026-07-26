@@ -91,7 +91,23 @@ func main() {
 		}
 	})
 
-	tmpl := template.Must(template.ParseGlob("templates/*.html"))
+	// ─── Feature flags ────────────────────────────────────────────────────────
+	// Off unless explicitly switched on, so an unfinished feature can't reach
+	// production by accident — enabling it is a deliberate, per-environment
+	// act. Set FEATURE_INSTOCK=true in .env to work on /instock locally.
+	featureInstock := os.Getenv("FEATURE_INSTOCK") == "true"
+
+	// Exposed to templates as a function rather than threaded through each
+	// handler's data map: nav.html and footer.html are included by every page,
+	// so the data-map route would mean touching every handler and remembering
+	// to do it again for each new one. Funcs have to be attached before
+	// parsing, which is why this uses template.New(...).Funcs(...) instead of
+	// the package-level template.ParseGlob.
+	funcs := template.FuncMap{
+		"featureInstock": func() bool { return featureInstock },
+	}
+
+	tmpl := template.Must(template.New("").Funcs(funcs).ParseGlob("templates/*.html"))
 	tmpl = template.Must(tmpl.ParseGlob("templates/partials/*.html"))
 	tmpl = template.Must(tmpl.ParseGlob("templates/admin/*.html"))
 	e.Renderer = &TemplateRenderer{templates: tmpl}
@@ -125,8 +141,15 @@ func main() {
 	// outage. Echo/net-http handles the empty-body part of HEAD itself.
 	e.Match([]string{http.MethodGet, http.MethodHead}, "/", handlers.Home)
 	e.POST("/contact", handlers.Contact, publicBodyLimit, formRateLimit)
-	e.Match([]string{http.MethodGet, http.MethodHead}, "/instock", handlers.Instock)
-	e.POST("/instock/interest", handlers.InstockInterest, publicBodyLimit, formRateLimit)
+
+	// Not registered at all when the flag is off, so /instock returns a plain
+	// 404 rather than existing as an unlinked page someone could still reach
+	// by guessing the URL or following a stale link. Hiding only the nav link
+	// would leave the page — and its interest form — publicly live.
+	if featureInstock {
+		e.Match([]string{http.MethodGet, http.MethodHead}, "/instock", handlers.Instock)
+		e.POST("/instock/interest", handlers.InstockInterest, publicBodyLimit, formRateLimit)
+	}
 
 	adminAuth := middleware.BasicAuth(func(username, password string, c echo.Context) (bool, error) {
 		expectedUser := os.Getenv("ADMIN_USER")
