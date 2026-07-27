@@ -27,13 +27,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The Dockerfile decides which Go builds this project, so CI installs
+      # that one. Parsing it needs no toolchain, which is why this can run
+      # before setup-go.
+      #
+      # NOT `go-version-file: go.mod`. That was the original approach and it
+      # was wrong: the `go` directive is a minimum language version, and
+      # setup-go treats it as an exact pin, so `go 1.25.0` installed Go 1.25.0
+      # and the vulnerability scan reported 26 standard-library findings that
+      # were all already fixed in later 1.25.x patches. The shipped image,
+      # built on golang:1.26-alpine, never had any of them.
+      - id: go
+        run: echo "version=$(make print-go-version)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-go@v5
         with:
-          # Reads the directive from go.mod rather than pinning a version here.
-          # A dependency upgrade that raises the directive then moves CI with
-          # it automatically, instead of failing with a confusing toolchain
-          # error weeks later.
-          go-version-file: go.mod
+          go-version: ${{ steps.go.outputs.version }}
+          # Resolve to the newest patch of that minor, mirroring how the
+          # golang:<minor>-alpine tag resolves. Without this a cached toolchain
+          # can pin an early patch and reintroduce exactly the problem above.
+          check-latest: true
           cache: true
 
       - run: make fmt-check
@@ -60,9 +73,12 @@ jobs:
     # never be folded into the check job.
     steps:
       - uses: actions/checkout@v4
+      - id: go
+        run: echo "version=$(make print-go-version)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ steps.go.outputs.version }}
+          check-latest: true
           cache: true
       - run: make vuln
 

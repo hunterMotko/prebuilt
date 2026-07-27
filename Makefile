@@ -11,7 +11,7 @@ IMAGE               ?= prebuilt
 TAG                 ?= dev
 
 .DEFAULT_GOAL := help
-.PHONY: help run build test fmt fmt-check vet vuln smoke \
+.PHONY: help run build test fmt fmt-check vet vuln smoke print-go-version \
         check-docker-go docker-build docker-smoke ci clean
 
 help: ## List targets
@@ -53,6 +53,20 @@ vuln: ## govulncheck
 
 smoke: ## End-to-end checks against a real binary (throwaway DB)
 	./scripts/admin-smoke.sh
+
+# The Dockerfile is the single source of truth for which Go builds this
+# project, because it is the one that produces the artifact that actually runs.
+# CI reads this so it installs the same toolchain that ships.
+#
+# This exists because of a real CI failure: the workflow originally used
+# setup-go's `go-version-file: go.mod`, on the assumption that following go.mod
+# would keep CI from drifting. But the `go` directive is a MINIMUM LANGUAGE
+# VERSION, not a toolchain pin — and setup-go treats it as an exact version. So
+# `go 1.25.0` installed literally Go 1.25.0, and govulncheck reported 26
+# standard-library vulnerabilities that were all fixed in later 1.25.x patches.
+# The production image was never affected; only the scan was wrong.
+print-go-version: ## Print the Go major.minor the Dockerfile builds with
+	@sed -n 's/^FROM golang:\([0-9][0-9.]*\).*/\1/p' Dockerfile | head -1
 
 # Guards a bug this project actually shipped: `go get` silently raised the go
 # directive from 1.22 to 1.25, and the Dockerfile was still building on
