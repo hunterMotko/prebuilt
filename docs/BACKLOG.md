@@ -431,22 +431,33 @@ the real domain starts to matter (currently Gmail-to-self, where it does not).
 
 ## 8. Technical debt
 
-| ID | Item | Sev | Effort |
-|---|---|---|---|
-| DEBT-1 | Error fragments bypass `html/template` (Q2) | S3 | M |
-| DEBT-2 | `main.go` is doing too much | S3 | M |
-| DEBT-3 | Config read via scattered `os.Getenv` | S3 | S |
-| DEBT-4 | No DB layer interface; handlers call package globals | S3 | L |
-| DEBT-5 | Inline styles/scripts in admin templates | S3 | S |
+| ID | Item | Sev | Effort | Status |
+|---|---|---|---|---|
+| DEBT-1 | Error fragments bypass `html/template` (Q2) | S3 | M | Open |
+| DEBT-2 | `main.go` is doing too much | S3 | M | **Done** |
+| DEBT-3 | Config read via scattered `os.Getenv` | S3 | S | Partial |
+| DEBT-4 | No DB layer interface; handlers call package globals | S3 | L | Open |
+| DEBT-5 | Inline styles/scripts in admin templates | S3 | S | Partial |
 
 **DEBT-1.** Full analysis in `AUDIT_CHECKLIST.md`. Security motivation is
 already satisfied by centralised escaping; what remains is consistency. The real
 risk is the htmx swap contract (`hx-swap="outerHTML"` against
 `#form-response`) — the fragment must keep an identical outer element.
 
-**DEBT-2.** Routing, middleware, template registry, feature flags, auth wiring,
-and shutdown all live in one `main()`. Extracting a `server` package would make
-it testable.
+**DEBT-2.** *Done.* Split into `config.go` (settings), `server.go`
+(`newServer`), and a 56-line `main()` holding only process lifecycle. See
+`TEST-6` for what that unlocked.
+
+**DEBT-3.** *Partial.* The main package's nine scattered `os.Getenv` calls are
+now a single `Config` resolved by `loadConfig()`. The SMTP settings in
+`handlers/contact.go` are still read inline; moving those means threading
+config into package-level handler functions, which is `DEBT-4`.
+
+**DEBT-5.** *Partial.* Inline `<script>` blocks are gone — moved to
+`public/js/admin.js` so the CSP needs no `'unsafe-inline'` for scripts. Inline
+`style="background:{{.Hex}}"` colour swatches remain, covered deliberately by
+`style-src-attr`; their values come from owner-editable DB rows, so a CSS class
+per colour is not available.
 
 **DEBT-3.** Env vars are read at point of use across several files. A single
 `config` struct parsed once at startup makes misconfiguration a boot-time error
@@ -467,7 +478,7 @@ Blocks `TEST-1`.
 | TEST-3 | No `govulncheck` | S3 | S | **Done** |
 | TEST-4 | Docker image build never verified | S2 | S | **Done** |
 | TEST-5 | No smoke test after deploy | S3 | M | Open |
-| TEST-6 | `main()` is not testable | S3 | M | Open |
+| TEST-6 | `main()` is not testable | S3 | M | **Done** |
 
 **TEST-1 — Coverage.** *Partial.* Six Go tests over pure functions
 (`GenerateCode`, `Describe`, `checkPhotoCap`, and three over
@@ -475,8 +486,11 @@ Blocks `TEST-1`.
 covering routing, auth, CSRF via both token sources, security headers, body
 limits, rate limiting, and the spam defences.
 
-The end-to-end checks live in bash rather than Go for a specific reason — see
-`TEST-6`. Porting them is blocked on that refactor, not on effort.
+`TEST-6` unblocked the Go side: `server_test.go` adds 15 tests against the real
+wiring, three of them mutation-tested against regressions this project actually
+shipped. What stays in bash is what needs a real process and filesystem —
+rate-limiter burst behaviour over wall-clock time, the CSRF round trip through
+a cookie jar, and persistence assertions via `sqlite3`.
 
 **TEST-2 — CI.** *Done.* `.github/workflows/ci.yml`, three jobs:
 
@@ -518,18 +532,38 @@ in 0.23s rather than hitting the 10s grace timeout, so graceful shutdown works.
 one rate-limit bucket and real customers collectively 429), volumes mounted,
 `/data` writable, TLS valid. None of it is visible to CI.
 
-**TEST-6 — `main()` is untestable.** *Open.* Everything the smoke script checks
-— middleware order, the group's auto-registered `RouteNotFound`,
-`admin.GET("")` path joining, nested body limits, template `ParseGlob` — lives
-inside `main()`. A `httptest` test would have to construct its own `echo.New()`
-and re-wire the middleware, meaning it tests a *copy* of `main.go` rather than
-`main.go` itself. That is exactly how a green suite coexists with a broken
-site, and it is the class of bug that produced the static-asset 404.
+**TEST-6 — `main()` is untestable.** *Done.* `main()` went from 345 lines to
+56: configuration in `config.go`, all wiring in `newServer(cfg) (*echo.Echo,
+error)` in `server.go`, and `main()` reduced to process lifecycle — config,
+storage, signals, shutdown. `database.Init` now takes the path as a parameter
+instead of reading `DB_PATH`, so a caller can point at a temporary file without
+mutating the environment. This also closes `DEBT-2` and the main-package half
+of `DEBT-3`.
 
-Fix: extract `func newServer() (*echo.Echo, error)` holding the current body of
-`main()`, leaving `main()` as construction plus signal handling. Roughly 35 of
-the 43 smoke checks then port to Go tests against the real wiring; the
-remainder stay in bash because they need a real process and filesystem.
+`server_test.go` adds 15 tests against the instance `newServer` actually
+builds. That distinction is the entire point: middleware ordering, the
+catch-all `RouteNotFound` a middleware-bearing `Group` auto-registers,
+`admin.GET("")` path joining, and the nested public-3M/admin-40M body limits
+are properties of `newServer` and nothing else. A test that constructed its own
+`echo.New()` and re-declared the middleware would assert against a copy and
+stay green through exactly the regressions worth catching.
+
+Three were mutation-tested rather than assumed:
+
+| Mutation | Caught by |
+|---|---|
+| `e.Group("/public", mw).Static(...)` — the change that 404'd every asset | `TestStaticAssetsAreNotShadowed` |
+| Basic Auth returning `true` on blank credentials | `TestAdminFailsClosedWhenUnconfigured` |
+| `BodyLimit("3M")` applied globally | `TestBodyLimitsAreScopedNotGlobal` |
+
+`template.Must` was also replaced with returned errors, so a glob matching
+nothing — what a bad Dockerfile `COPY` produces — reports which pattern failed
+instead of panicking with a stack trace.
+
+Remaining in bash (`scripts/admin-smoke.sh`): the checks needing a real process
+and filesystem — rate-limiter burst behaviour over wall-clock time, the CSRF
+round trip through a cookie jar, and end-to-end persistence assertions via
+`sqlite3`.
 
 ### Deployment pipeline — decided, not yet built
 

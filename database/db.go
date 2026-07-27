@@ -46,20 +46,21 @@ func checkDatabaseDir(path string) {
 	}
 }
 
-func Init() {
+// Init opens the database at path and brings the schema up to date.
+//
+// The path is a parameter rather than an os.Getenv read so callers — including
+// tests — can point at a temporary file without mutating the environment. It
+// must sit inside a writable *directory*: SQLite puts its rollback-journal and
+// WAL sidecars alongside the database, so bind-mounting just the .db file would
+// leave those sidecars in a container's ephemeral layer where a crash mid-write
+// could not be rolled back.
+//
+// Failures here call log.Fatal rather than returning an error, deliberately.
+// Every one of them is a startup-time condition — missing directory, unwritable
+// volume, failed migration — where continuing would serve a broken site, and
+// the caller's only sane response is to exit with the same message.
+func Init(path string) {
 	var err error
-
-	// DB_PATH lets the database file live outside the working directory, which
-	// a container needs: SQLite writes its rollback-journal/WAL sidecar files
-	// into the same directory as the database, so the database has to sit in a
-	// mounted *directory*. Bind-mounting just the .db file would leave those
-	// sidecars in the container's ephemeral layer, where a crash mid-write
-	// couldn't be rolled back. Defaults to the original path so a plain
-	// `go run .` behaves exactly as before.
-	path := os.Getenv("DB_PATH")
-	if path == "" {
-		path = "./prebuilt.db"
-	}
 
 	// Checked up front because SQLite reports both "directory missing" and
 	// "directory not writable" as the same opaque CANTOPEN error, whose driver
