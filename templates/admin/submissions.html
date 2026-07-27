@@ -1,0 +1,79 @@
+{{define "admin_submissions.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="icon" type="image/png" href="/public/images/pbs-logo.png">
+    <link rel="stylesheet" href="/public/css/style.css">
+    <meta name="csrf-token" content="{{.CSRFToken}}">
+</head>
+<body class="admin-body">
+
+<div class="container admin-shell">
+    <div class="admin-header">
+        <h1 class="section-title">Contact <span class="red-text">Submissions</span></h1>
+        <a href="/admin" class="btn btn-outline btn-sm">Inventory</a>
+    </div>
+
+    {{if .Undelivered}}
+    <div class="admin-alert admin-alert--warn">
+        <strong>{{.Undelivered}} submission(s) were not confirmed as emailed.</strong>
+        <p>
+            These leads are saved here but the notification email was not
+            accepted by the mail server, so they may never have reached your
+            inbox. Follow up with them directly using the details below.
+        </p>
+    </div>
+    {{end}}
+
+    <div class="admin-table-wrap">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Received</th>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Email</th>
+                    <th>Shed</th>
+                    <th>Details</th>
+                    <th>Notification</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Cards}}
+                <tr class="{{if .Warning}}admin-row--warn{{end}}">
+                    <td class="nowrap">{{.CreatedAt.Format "Jan 2, 2006 3:04 PM"}}</td>
+                    <td>{{.Name}}</td>
+                    <td class="nowrap"><a href="tel:{{.Phone}}">{{.Phone}}</a></td>
+                    <td><a href="mailto:{{.Email}}">{{.Email}}</a></td>
+                    <td>{{.Style}} {{.Size}}</td>
+                    <td class="admin-details">{{.Details}}</td>
+                    <td>
+                        <span class="delivery delivery--{{.StatusClass}}">{{.StatusLabel}}</span>
+                        {{if .EmailError}}
+                        <!-- The raw SMTP error, shown so the cause is visible
+                             without shelling into the server for logs. -->
+                        <div class="delivery-error">{{.EmailError}}</div>
+                        {{end}}
+                    </td>
+                </tr>
+                {{else}}
+                <tr><td colspan="7" class="admin-empty">No contact submissions yet.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    <p class="admin-note">
+        "Emailed" means your mail server accepted the message for delivery. That
+        is the strongest confirmation an outgoing mail client can obtain — it is
+        not proof the message reached your inbox, so check spam if one is
+        missing.
+    </p>
+</div>
+
+</body>
+</html>
+{{end}}

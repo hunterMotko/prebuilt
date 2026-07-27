@@ -21,13 +21,32 @@ server {
     listen 80;
     listen [::]:80;
     server_name www.prebuiltshedsllc.com;
-    return 301 https://prebuiltshedsllc.com$request_uri;
+
+    # Must come BEFORE the redirect. A bare `return 301` at server level would
+    # also redirect Let's Encrypt's challenge requests, and the token only
+    # exists on the host being validated — so certbot would fail to issue (and
+    # later fail to renew) the certificate for www. `^~` makes this win over
+    # the catch-all below.
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://prebuiltshedsllc.com$request_uri;
+    }
 }
 
 server {
     listen 80;
     listen [::]:80;
     server_name prebuiltshedsllc.com;
+
+    # Same reason as above: without this, the challenge request gets proxied to
+    # the Go app, which knows nothing about it and returns 404 — certbot then
+    # reports validation failure with a confusing "unauthorized" error.
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
 
     # ─── THE ONE THAT WILL BITE YOU ───────────────────────────────────────────
     # nginx's default client_max_body_size is 1 MB. The admin photo upload

@@ -1133,6 +1133,24 @@ button {
 	gap: 1rem;
 }
 
+/* Honeypot field — see handlers/spam.go.
+   Positioned off-screen rather than display:none or visibility:hidden on
+   purpose: those two are the first things a spam bot checks for, and a field
+   it knows is a trap is a field it leaves blank. Everything here also has to
+   guarantee a real visitor can never land in it, hence the zero opacity and
+   the removal from the layout flow. Keyboard access is blocked by tabindex="-1"
+   and screen readers by aria-hidden, both on the markup. */
+.hp-field {
+	position: absolute;
+	left: -9999px;
+	top: -9999px;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	opacity: 0;
+	pointer-events: none;
+}
+
 .spinner {
 	display: none;
 	width: 22px;
@@ -2049,4 +2067,126 @@ button {
 	color: var(--text-muted);
 	font-size: .9rem;
 	margin-bottom: 1.5rem;
+}
+
+/* ─── ADMIN: SUBMISSIONS + DELIVERY STATUS ────────────────────────────────── */
+.admin-header-actions {
+	display: flex;
+	gap: .5rem;
+	align-items: center;
+}
+
+.admin-alert {
+	border-radius: var(--radius);
+	padding: 1rem 1.25rem;
+	margin-bottom: 1.5rem;
+	border-left: 4px solid;
+}
+
+.admin-alert p {
+	margin-top: .35rem;
+	font-size: .9rem;
+	color: var(--text-muted);
+}
+
+.admin-alert--warn {
+	background: rgba(201, 138, 31, .12);
+	border-color: var(--amber);
+}
+
+.admin-row--warn {
+	background: rgba(201, 138, 31, .07);
+}
+
+.delivery {
+	display: inline-block;
+	padding: .2rem .55rem;
+	border-radius: var(--radius-sm);
+	font-size: .75rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: .03em;
+	white-space: nowrap;
+}
+
+.delivery--ok {
+	background: rgba(46, 139, 87, .18);
+	color: #6FCF97;
+}
+
+.delivery--warn {
+	background: rgba(201, 138, 31, .18);
+	color: #E0A94A;
+}
+
+.delivery--fail {
+	background: rgba(204, 20, 20, .18);
+	color: #E56666;
+}
+
+.delivery-error {
+	margin-top: .3rem;
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: .7rem;
+	color: var(--text-muted);
+	max-width: 22rem;
+	word-break: break-word;
+}
+
+.admin-details {
+	max-width: 24rem;
+	font-size: .85rem;
+	color: var(--text-muted);
+	white-space: pre-wrap;
+}
+
+.admin-note {
+	margin-top: 1.25rem;
+	font-size: .8rem;
+	color: var(--chrome-dark);
+	max-width: 46rem;
+}
+
+.nowrap {
+	white-space: nowrap;
+}
+
+/* ─── ERROR PAGES (404 / 500 / 429) ───────────────────────────────────────── */
+.error-page {
+	min-height: 70vh;
+	display: flex;
+	align-items: center;
+	padding: calc(var(--nav-h) + 4rem) 0 4rem;
+}
+
+.error-inner {
+	text-align: center;
+	max-width: 40rem;
+}
+
+.error-code {
+	font-family: var(--font-heading);
+	font-size: clamp(4rem, 14vw, 8rem);
+	line-height: 1;
+	color: var(--red);
+	opacity: .35;
+}
+
+.error-heading {
+	font-family: var(--font-heading);
+	font-size: clamp(1.75rem, 4vw, 2.5rem);
+	margin: .5rem 0 1rem;
+}
+
+.error-message {
+	color: var(--text-muted);
+	font-size: 1.05rem;
+	margin-bottom: 2rem;
+}
+
+.error-actions {
+	display: flex;
+	gap: 1rem;
+	justify-content: center;
+	flex-wrap: wrap;
 }

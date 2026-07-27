@@ -30,9 +30,10 @@ func AdminList(c echo.Context) error {
 	}
 
 	return c.Render(http.StatusOK, "admin_list.html", map[string]any{
-		"Title":     "Inventory — Admin",
-		"Cards":     toCards(items),
-		"CSRFToken": csrfToken(c),
+		"Title":       "Inventory — Admin",
+		"Cards":       toCards(items),
+		"CSRFToken":   csrfToken(c),
+		"Undelivered": undeliveredCount(c),
 	})
 }
 

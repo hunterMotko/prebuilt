@@ -12,7 +12,9 @@
     <td>{{len .Images}}</td>
     <td>
         <form hx-post="/admin/inventory/{{.ID}}/status" hx-target="closest tr" hx-swap="outerHTML">
-            <select name="status" onchange="this.form.requestSubmit()">
+            <!-- data-autosubmit replaces an inline onchange handler, which the
+                 CSP blocks. The listener lives in public/js/admin.js. -->
+            <select name="status" data-autosubmit>
                 <option value="in_stock" {{if eq .Status "in_stock"}}selected{{end}}>In Stock</option>
                 <option value="on_hold" {{if eq .Status "on_hold"}}selected{{end}}>On Hold</option>
                 <option value="sold" {{if eq .Status "sold"}}selected{{end}}>Sold</option>

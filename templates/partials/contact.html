@@ -13,6 +13,8 @@
                 hx-target="#form-response"
                 hx-swap="outerHTML"
                 hx-indicator="#form-spinner"
+                hx-disabled-elt="find button[type='submit']"
+                hx-sync="this:drop"
             >
                 <div class="form-row">
                     <div class="form-group">
@@ -67,6 +69,18 @@
                     <textarea id="details" name="details" rows="5" maxlength="2000"
                         placeholder="Tell us about your project — intended use, preferred door placement, add-ons you're interested in, or any other details."></textarea>
                 </div>
+
+                <!-- Bot trap. Hidden with CSS rather than type="hidden" because
+                     form-filling bots skip hidden inputs but complete this one.
+                     aria-hidden and tabindex="-1" keep it out of the screen-reader
+                     and keyboard paths so a real visitor never reaches it, and
+                     autocomplete="off" plus the deliberately non-standard field
+                     name stop the browser filling it in. See handlers/spam.go. -->
+                <div class="hp-field" aria-hidden="true">
+                    <label for="hp-contact">Leave this field empty</label>
+                    <input type="text" id="hp-contact" name="contact_ref" tabindex="-1" autocomplete="off">
+                </div>
+                <input type="hidden" name="form_ts" value="{{formTS}}">
 
                 <div id="form-response"></div>
 

@@ -1,0 +1,69 @@
+# fail2ban jails for the Prebuilt Sheds VPS.
+#
+# Install:
+#   cp deploy/fail2ban/filter.d/prebuilt-admin.conf /etc/fail2ban/filter.d/
+#   cp deploy/fail2ban/jail.local                   /etc/fail2ban/jail.local
+#   fail2ban-client reload
+#   fail2ban-client status                # jails should be listed
+#
+# IMPORTANT — set ignoreip below to your own address before enabling, or a
+# fat-fingered admin password can lock you out of both /admin and SSH.
+#
+# One caveat specific to this host: Docker writes its own iptables rules that
+# bypass ufw. That does NOT affect fail2ban, which inserts into the same
+# filter chains, but it is the reason docker-compose.yml binds the app to
+# 127.0.0.1 — the app is only reachable through nginx, so nginx's log is a
+# complete record of the traffic that hit it.
+
+[DEFAULT]
+
+# Your home/office IP and any static address you administer from. Comma
+# separated. Localhost is required so the health check and nginx itself are
+# never banned.
+ignoreip = 127.0.0.1/8 ::1
+# ignoreip = 127.0.0.1/8 ::1 203.0.113.5
+
+bantime  = 1h
+findtime = 10m
+maxretry = 5
+backend  = systemd
+
+# ─── SSH ──────────────────────────────────────────────────────────────────────
+# The highest-value target on the box by a wide margin. The admin panel holds
+# shed inventory; SSH holds the server. Enabled first for that reason.
+[sshd]
+enabled  = true
+port     = ssh
+maxretry = 4
+bantime  = 4h
+
+# ─── Admin panel brute force ──────────────────────────────────────────────────
+# Complements, does not replace, the per-IP rate limiter in main.go. The app
+# limiter throttles (429) and forgets after 10 minutes; this bans at the
+# firewall so a guessing loop stops consuming server resources entirely.
+[prebuilt-admin]
+enabled  = true
+port     = http,https
+filter   = prebuilt-admin
+logpath  = /var/log/nginx/access.log
+maxretry = 5
+findtime = 10m
+bantime  = 2h
+
+# ─── Generic nginx abuse ──────────────────────────────────────────────────────
+# Ships with fail2ban. Catches the vulnerability scanners that probe for
+# /wp-login.php, /.env, /phpmyadmin and the like — the bulk of the 404 noise
+# logging.go deliberately does not record on the application side, on the basis
+# that it belongs at this layer instead.
+[nginx-botsearch]
+enabled = true
+port    = http,https
+logpath = /var/log/nginx/access.log
+
+# Only useful once nginx has a limit_req zone defined; the shipped
+# nginx.conf.example does not. Left disabled rather than deleted so it is
+# obvious this is available if request flooding ever becomes a problem.
+[nginx-limit-req]
+enabled = false
+port    = http,https
+logpath = /var/log/nginx/error.log

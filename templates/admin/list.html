@@ -9,19 +9,29 @@
     <link rel="stylesheet" href="/public/css/style.css">
     <meta name="csrf-token" content="{{.CSRFToken}}">
     <script src="/public/js/htmx.min.js" defer></script>
-    <script>
-        document.addEventListener('htmx:configRequest', function (e) {
-            e.detail.headers['X-CSRF-Token'] = document.querySelector('meta[name="csrf-token"]').content;
-        });
-    </script>
+    <script src="/public/js/admin.js" defer></script>
 </head>
 <body class="admin-body">
 
 <div class="container admin-shell">
     <div class="admin-header">
         <h1 class="section-title">Inventory <span class="red-text">Admin</span></h1>
-        <a href="/admin/inventory/new" class="btn btn-primary btn-sm">+ New Item</a>
+        <div class="admin-header-actions">
+            <a href="/admin/submissions" class="btn btn-outline btn-sm">Submissions</a>
+            <a href="/admin/inventory/new" class="btn btn-primary btn-sm">+ New Item</a>
+        </div>
     </div>
+
+    {{if .Undelivered}}
+    <div class="admin-alert admin-alert--warn">
+        <strong>{{.Undelivered}} contact submission(s) may not have been emailed.</strong>
+        <p>
+            Those leads are saved, but the notification was not confirmed as
+            accepted by the mail server — check them so none are missed.
+            <a href="/admin/submissions">View submissions</a>
+        </p>
+    </div>
+    {{end}}
 
     <div class="admin-table-wrap">
         <table class="admin-table">
