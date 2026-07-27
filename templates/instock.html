@@ -94,6 +94,8 @@
         <form
             class="contact-form"
             hx-post="/instock/interest"
+            hx-disabled-elt="find button[type='submit']"
+            hx-sync="this:drop"
             hx-target="#interest-form-response"
             hx-swap="outerHTML"
             hx-indicator="#interest-form-spinner"
@@ -116,6 +118,14 @@
                 <label for="interest-message">Message</label>
                 <textarea id="interest-message" name="message" rows="4" maxlength="2000" placeholder="Any questions or timing details?"></textarea>
             </div>
+
+            <!-- Bot trap — see the matching block in partials/contact.html
+                 and handlers/spam.go. -->
+            <div class="hp-field" aria-hidden="true">
+                <label for="hp-interest">Leave this field empty</label>
+                <input type="text" id="hp-interest" name="contact_ref" tabindex="-1" autocomplete="off">
+            </div>
+            <input type="hidden" name="form_ts" value="{{formTS}}">
 
             <div id="interest-form-response"></div>
 

@@ -9,11 +9,7 @@
     <link rel="stylesheet" href="/public/css/style.css">
     <meta name="csrf-token" content="{{.CSRFToken}}">
     <script src="/public/js/htmx.min.js" defer></script>
-    <script>
-        document.addEventListener('htmx:configRequest', function (e) {
-            e.detail.headers['X-CSRF-Token'] = document.querySelector('meta[name="csrf-token"]').content;
-        });
-    </script>
+    <script src="/public/js/admin.js" defer></script>
 </head>
 <body class="admin-body">
 

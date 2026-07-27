@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -48,13 +49,27 @@ func main() {
 		e.IPExtractor = echo.ExtractIPFromXFFHeader()
 	}
 
-	e.Use(middleware.Logger())
+	// Errors and abuse signals only — nginx is the access log. See logging.go
+	// for exactly what is kept and why.
+	e.Use(errorOnlyLogger())
 	e.Use(middleware.Recover())
 	// Standard security headers (nosniff, X-Frame-Options, XSS protection).
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
-		XSSProtection:      "1; mode=block",
+		// "0", not "1; mode=block". The header switched on a legacy browser XSS
+		// auditor that was itself a source of vulnerabilities — it could be
+		// coaxed into leaking information by selectively blocking parts of a
+		// page. Every browser that implemented it has since removed it, so this
+		// changes nothing at runtime; it is set explicitly rather than omitted
+		// because Echo's default is the deprecated value.
+		XSSProtection:      "0",
 		ContentTypeNosniff: "nosniff",
 		XFrameOptions:      "SAMEORIGIN",
+		// Without this the browser sends the full URL of the current page as
+		// the Referer on outbound links. Harmless from the homepage, not
+		// harmless from /admin/inventory/17/edit — that path would leak to
+		// whatever third party an admin clicked through to. Cross-origin
+		// requests now carry only the origin; same-site keeps the full path.
+		ReferrerPolicy: "strict-origin-when-cross-origin",
 		// Set explicitly because Echo's DefaultSecureConfig leaves HSTSMaxAge
 		// at 0, which silently means the header is never sent at all — using
 		// plain middleware.Secure() looks like HSTS coverage but isn't.
@@ -69,7 +84,66 @@ func main() {
 		// which is a confusing outage to debug if one ever isn't. Flip to
 		// false once you know every subdomain will have a certificate.
 		HSTSExcludeSubdomains: true,
+
+		// Content-Security-Policy. Every asset this site loads is served from
+		// its own origin — htmx is vendored at /public/js/htmx.min.js, there are
+		// no CDNs, web fonts, or analytics — so 'self' is genuinely sufficient
+		// and no host allowlist is needed.
+		//
+		// No nonce. A nonce means generating a random value per request and
+		// threading it into every template; it is the right answer when inline
+		// scripts are unavoidable, and here they weren't. The two admin inline
+		// blocks moved to public/js/admin.js instead, which is why script-src
+		// can be a plain 'self' with no 'unsafe-inline' anywhere.
+		//
+		//   img-src data:      style.css embeds the select-arrow chevron as an
+		//                      inline SVG data URI.
+		//   style-src-attr     the admin and /instock colour swatches render as
+		//                      style="background:{{.Hex}}" from owner-editable
+		//                      DB rows, so those attributes must be allowed.
+		//                      Split out deliberately: style-src itself stays
+		//                      strict, so this permits inline style ATTRIBUTES
+		//                      without permitting an injected <style> block.
+		//                      html/template already applies CSS-context
+		//                      escaping inside a style attribute.
+		//   base-uri/form-action  block <base> injection and form hijacking —
+		//                      the two things an attacker reaches for when
+		//                      script injection is closed off.
+		//   object-src 'none'  no plugins, ever.
+		ContentSecurityPolicy: "default-src 'self'; " +
+			"script-src 'self'; " +
+			"style-src 'self'; " +
+			"style-src-attr 'unsafe-inline'; " +
+			"img-src 'self' data:; " +
+			"font-src 'self'; " +
+			"connect-src 'self'; " +
+			"form-action 'self'; " +
+			"base-uri 'self'; " +
+			"frame-ancestors 'self'; " +
+			"object-src 'none'",
+
+		// A CSP mistake fails silently and totally: the browser refuses to run
+		// the blocked script and the server logs nothing, so the carousels,
+		// mobile nav, and contact form would break with no signal here. Deploy
+		// with CSP_REPORT_ONLY=true, click through every page with devtools
+		// open, then remove it. Kept as an env var rather than a code constant
+		// so reverting is a restart, not a rebuild and redeploy.
+		CSPReportOnly: os.Getenv("CSP_REPORT_ONLY") == "true",
 	}))
+
+	// Permissions-Policy has no field in Echo's SecureConfig, so it is set
+	// here. It denies the powerful browser APIs outright — nothing on this site
+	// uses the camera, microphone, or location, so an empty allowlist for each
+	// costs nothing and means an injected script cannot prompt a visitor for
+	// them under this domain's name. Defence in depth behind the CSP, not a
+	// substitute for it.
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Response().Header().Set("Permissions-Policy",
+				"geolocation=(), camera=(), microphone=(), payment=(), usb=(), interest-cohort=()")
+			return next(c)
+		}
+	})
 
 	// Static assets are served straight off disk and their URLs never change
 	// (no build step fingerprints filenames), so without an explicit
@@ -105,12 +179,24 @@ func main() {
 	// the package-level template.ParseGlob.
 	funcs := template.FuncMap{
 		"featureInstock": func() bool { return featureInstock },
+		// Render time, stamped into both public forms so the handler can reject
+		// a submission that arrived faster than a person could type. A template
+		// func rather than handler data for the same reason as featureInstock:
+		// the contact form is a partial of the homepage, so threading it through
+		// would mean editing every handler that renders a page containing a form.
+		"formTS": func() string { return strconv.FormatInt(time.Now().Unix(), 10) },
 	}
 
 	tmpl := template.Must(template.New("").Funcs(funcs).ParseGlob("templates/*.html"))
 	tmpl = template.Must(tmpl.ParseGlob("templates/partials/*.html"))
 	tmpl = template.Must(tmpl.ParseGlob("templates/admin/*.html"))
 	e.Renderer = &TemplateRenderer{templates: tmpl}
+
+	// Echo's default handler emits JSON, so a mistyped URL rendered
+	// {"message":"Not Found"} on a marketing site and a rate-limited visitor
+	// got raw JSON swapped into the page by htmx. Set after the renderer
+	// because it renders error.html.
+	e.HTTPErrorHandler = handlers.HTTPErrorHandler
 
 	e.Static("/public", "public")
 	e.File("/robots.txt", "public/robots.txt")
@@ -187,8 +273,30 @@ func main() {
 		CookiePath: "/admin",
 	})
 
-	admin := e.Group("/admin", adminAuth, middleware.BodyLimit("40M"), adminCSRF)
+	// Basic Auth has no attempt limit of its own: without this an attacker can
+	// pipeline credential guesses at whatever rate the server will answer, and
+	// every one of them is a fresh bcrypt-free string comparison. Ordered
+	// BEFORE adminAuth in the group so rejected requests are counted too —
+	// behind the auth check it would only ever throttle the legitimate admin.
+	//
+	// Sized for a person, not a script: 20 straight through, then one every two
+	// seconds. Clicking through inventory and uploading photos stays well
+	// under that, while a guessing loop drops to 30 attempts a minute. Against
+	// the current 32-character password that rate is already hopeless, so the
+	// real wins are capping log noise and stopping off-the-shelf credential
+	// stuffing. SEC-8 (fail2ban) is the version of this that also bans the
+	// host, and covers SSH at the same time.
+	adminRateLimit := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      rate.Limit(0.5),
+			Burst:     20,
+			ExpiresIn: 10 * time.Minute,
+		}),
+	})
+
+	admin := e.Group("/admin", adminRateLimit, adminAuth, middleware.BodyLimit("40M"), adminCSRF)
 	admin.GET("", handlers.AdminList)
+	admin.GET("/submissions", handlers.AdminSubmissions)
 	admin.GET("/inventory/new", handlers.AdminNewItemForm)
 	admin.POST("/inventory", handlers.AdminCreateItem)
 	admin.GET("/inventory/:id/edit", handlers.AdminEditItemForm)
@@ -229,4 +337,9 @@ func main() {
 	if err := e.Shutdown(ctx); err != nil {
 		e.Logger.Fatal(err)
 	}
+
+	// Notification emails are sent in background goroutines that Shutdown
+	// knows nothing about, so without this a deploy landing between "lead
+	// saved" and "mail sent" would drop the notification silently.
+	handlers.WaitForEmails(ctx)
 }

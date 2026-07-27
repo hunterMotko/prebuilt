@@ -92,6 +92,13 @@ func Instock(c echo.Context) error {
 // in-stock shed. The item is always looked up server-side from the trusted
 // item_id — never trust a client-supplied description of which shed this is.
 func InstockInterest(c echo.Context) error {
+	// See the identical guard in Contact — same reasoning, same silent
+	// success response.
+	if isBotSubmission(c) {
+		logSpamRejection(c, spamReason(c))
+		return c.Render(http.StatusOK, "interest_success.html", nil)
+	}
+
 	itemID, err := strconv.ParseInt(c.FormValue("item_id"), 10, 64)
 	if err != nil {
 		return c.HTML(http.StatusUnprocessableEntity, errorHTML("Please try again from the In Stock page."))
@@ -129,12 +136,13 @@ func InstockInterest(c echo.Context) error {
 		Details: details,
 	}
 
-	if _, err := database.SaveContactSubmission(sub); err != nil {
+	id, err := database.SaveContactSubmission(sub)
+	if err != nil {
 		c.Logger().Error("db save failed:", err)
 		return c.HTML(http.StatusInternalServerError, errorHTML("Something went wrong. Please try again or call us directly."))
 	}
 
-	go sendEmail(sub)
+	queueEmail(id, sub)
 
 	return c.Render(http.StatusOK, "interest_success.html", nil)
 }

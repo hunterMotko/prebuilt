@@ -1,52 +1,62 @@
-// Nav scroll effect
+// Nav — scroll effect and mobile toggle.
+//
+// Guarded because error.html loads this file but has no nav at all: without
+// the check, `toggle.addEventListener` threw a TypeError on null at parse
+// time and killed the ENTIRE script, so every block below this one silently
+// stopped running on that page. Same null-guard pattern as the gallery and
+// lightbox sections further down.
 const nav = document.getElementById('nav');
-window.addEventListener('scroll', () => {
-	nav.classList.toggle('scrolled', window.scrollY > 40);
-}, { passive: true });
-
-// Mobile nav toggle. Kept in one setNavOpen() so every way of closing the
-// menu (link click, Escape, clicking outside, widening past the breakpoint)
-// leaves the panel, the hamburger icon, and aria-expanded in agreement —
-// previously each close path updated its own subset and they could drift.
 const toggle = document.getElementById('navToggle');
 const links = document.getElementById('navLinks');
 
-function setNavOpen(open) {
-	links.classList.toggle('open', open);
-	toggle.classList.toggle('open', open);
-	toggle.setAttribute('aria-expanded', open);
+if (nav) {
+	window.addEventListener('scroll', () => {
+		nav.classList.toggle('scrolled', window.scrollY > 40);
+	}, { passive: true });
 }
 
-toggle.addEventListener('click', () => {
-	setNavOpen(!links.classList.contains('open'));
-});
+// Kept in one setNavOpen() so every way of closing the menu (link click,
+// Escape, clicking outside, widening past the breakpoint) leaves the panel,
+// the hamburger icon, and aria-expanded in agreement — previously each close
+// path updated its own subset and they could drift.
+if (toggle && links) {
+	const setNavOpen = (open) => {
+		links.classList.toggle('open', open);
+		toggle.classList.toggle('open', open);
+		toggle.setAttribute('aria-expanded', open);
+	};
 
-// Close on link click
-links.querySelectorAll('a').forEach(a => {
-	a.addEventListener('click', () => setNavOpen(false));
-});
+	toggle.addEventListener('click', () => {
+		setNavOpen(!links.classList.contains('open'));
+	});
 
-// Escape closes it, and focus goes back to the hamburger so a keyboard user
-// isn't stranded on a link that just became unfocusable.
-document.addEventListener('keydown', e => {
-	if (e.key === 'Escape' && links.classList.contains('open')) {
-		setNavOpen(false);
-		toggle.focus();
-	}
-});
+	// Close on link click
+	links.querySelectorAll('a').forEach(a => {
+		a.addEventListener('click', () => setNavOpen(false));
+	});
 
-// Clicking anywhere outside the menu closes it — expected behavior for a
-// dropdown, and without it the only way out was the hamburger itself.
-document.addEventListener('click', e => {
-	if (!links.classList.contains('open')) return;
-	if (!links.contains(e.target) && !toggle.contains(e.target)) setNavOpen(false);
-});
+	// Escape closes it, and focus goes back to the hamburger so a keyboard user
+	// isn't stranded on a link that just became unfocusable.
+	document.addEventListener('keydown', e => {
+		if (e.key === 'Escape' && links.classList.contains('open')) {
+			setNavOpen(false);
+			toggle.focus();
+		}
+	});
 
-// Widening past the breakpoint restores the horizontal link row, so a menu
-// left open would otherwise keep the hamburger stuck in its "X" state.
-window.addEventListener('resize', () => {
-	if (window.innerWidth > 1100 && links.classList.contains('open')) setNavOpen(false);
-});
+	// Clicking anywhere outside the menu closes it — expected behavior for a
+	// dropdown, and without it the only way out was the hamburger itself.
+	document.addEventListener('click', e => {
+		if (!links.classList.contains('open')) return;
+		if (!links.contains(e.target) && !toggle.contains(e.target)) setNavOpen(false);
+	});
+
+	// Widening past the breakpoint restores the horizontal link row, so a menu
+	// left open would otherwise keep the hamburger stuck in its "X" state.
+	window.addEventListener('resize', () => {
+		if (window.innerWidth > 1100 && links.classList.contains('open')) setNavOpen(false);
+	});
+}
 
 // Style-card image carousels (fade + dots, auto-rotate)
 document.querySelectorAll('[data-carousel]').forEach(root => {
@@ -206,5 +216,30 @@ document.querySelectorAll('.pricing-tab').forEach(tab => {
 		document.querySelectorAll('.pricing-pane').forEach(p => p.classList.remove('active'));
 		tab.classList.add('active');
 		document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+	});
+});
+
+// Double-submit guard for plain (non-htmx) forms — the admin create/edit
+// screens. Those are multipart POSTs that can take seconds while photos
+// upload, which is exactly the window in which an impatient second click
+// creates a duplicate inventory item.
+//
+// The htmx-driven public forms don't need this: they use hx-disabled-elt to
+// disable the button for the life of the request and hx-sync="this:drop" to
+// discard a duplicate request fired before the first finishes.
+//
+// Guarded on the submit event rather than click, so it only fires once the
+// browser's own HTML5 validation (required, type=email, min) has passed —
+// disabling on click would lock the button on an invalid form.
+document.querySelectorAll('form.admin-form').forEach(form => {
+	form.addEventListener('submit', () => {
+		const btn = form.querySelector('button[type="submit"]');
+		if (!btn) return;
+		// Defer past this event so the button's value still posts with the form.
+		setTimeout(() => {
+			btn.disabled = true;
+			btn.dataset.originalText = btn.textContent;
+			btn.textContent = 'Saving...';
+		}, 0);
 	});
 });

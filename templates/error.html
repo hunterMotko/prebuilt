@@ -1,0 +1,36 @@
+{{define "error.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <meta name="description" content="Prebuilt Sheds LLC — Quality gambrel, gable, and skillion sheds built to last.">
+    <!-- Error pages should never be indexed, and a 404 especially should not
+         accumulate in search results. -->
+    <meta name="robots" content="noindex">
+    <link rel="icon" type="image/png" href="/public/images/pbs-logo.png">
+    <link rel="stylesheet" href="/public/css/style.css">
+    <script src="/public/js/main.js" defer></script>
+</head>
+<body>
+
+{{template "nav.html" .}}
+
+<main class="error-page">
+    <div class="container error-inner">
+        <p class="error-code">{{.Code}}</p>
+        <h1 class="error-heading">{{.Heading}}</h1>
+        <p class="error-message">{{.Message}}</p>
+        <div class="error-actions">
+            <a href="/" class="btn btn-primary">Back to Home</a>
+            <a href="tel:+19893879233" class="btn btn-outline">Call Us</a>
+        </div>
+    </div>
+</main>
+
+{{template "footer.html" .}}
+
+</body>
+</html>
+{{end}}
