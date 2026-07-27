@@ -1,6 +1,9 @@
 package main
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 // Config is every environment-driven setting the server reads, resolved once at
 // startup.
@@ -17,6 +20,18 @@ import "os"
 type Config struct {
 	Port   string
 	DBPath string
+
+	// SiteURL is the public origin, no trailing slash, e.g.
+	// "https://prebuiltshedsllc.com". Required for canonical links and Open
+	// Graph tags, both of which must carry absolute URLs — a relative og:image
+	// is simply ignored by every scraper.
+	//
+	// Empty is a supported state, not a misconfiguration: local development has
+	// no meaningful public origin, and the templates omit those tags entirely
+	// rather than emitting a canonical that points nowhere. A wrong canonical
+	// is considerably worse than no canonical — it tells search engines the
+	// real page lives somewhere it does not.
+	SiteURL string
 
 	// AdminUser and AdminPass are compared in constant time by the Basic Auth
 	// validator. Empty means /admin fails closed rather than open.
@@ -64,8 +79,11 @@ func loadConfig() Config {
 	}
 
 	return Config{
-		Port:           port,
-		DBPath:         dbPath,
+		Port:   port,
+		DBPath: dbPath,
+		// Trailing slash trimmed so templates can concatenate paths without
+		// producing "https://example.com//instock".
+		SiteURL:        strings.TrimRight(os.Getenv("SITE_URL"), "/"),
 		AdminUser:      os.Getenv("ADMIN_USER"),
 		AdminPass:      os.Getenv("ADMIN_PASS"),
 		TrustProxy:     envBool("TRUST_PROXY"),

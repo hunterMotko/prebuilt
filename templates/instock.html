@@ -5,6 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}}</title>
     <meta name="description" content="Prebuilt Sheds LLC — Already-built sheds ready for pickup or delivery today.">
+
+    {{/* Same block as layout.html, with this page's own URL. See the comments
+         there for why it is gated on SITE_URL. */}}
+    {{if siteURL}}
+    <link rel="canonical" href="{{siteURL}}/instock">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{siteURL}}/instock">
+    <meta property="og:site_name" content="Prebuilt Sheds LLC">
+    <meta property="og:title" content="{{.Title}}">
+    <meta property="og:description" content="Already-built sheds on the lot now — ready for pickup or delivery.">
+    <meta property="og:image" content="{{siteURL}}/public/images/hero-image.jpg">
+    <meta property="og:image:alt" content="A finished shed built by Prebuilt Sheds LLC">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{.Title}}">
+    <meta name="twitter:description" content="Already-built sheds on the lot now — ready for pickup or delivery.">
+    <meta name="twitter:image" content="{{siteURL}}/public/images/hero-image.jpg">
+    {{end}}
+
     <link rel="icon" type="image/png" href="/public/images/pbs-logo.png">
     <link rel="stylesheet" href="/public/css/style.css">
     <script src="/public/js/htmx.min.js" defer></script>

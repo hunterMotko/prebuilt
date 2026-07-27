@@ -217,8 +217,8 @@ photo upload/delete, or CSP violations.
 | ~~BUG-4~~ | ~~No MIME/charset headers~~ — **done** (UTF-8 + Date) | — | — |
 | BUG-5 | No email/phone format validation | S3 | S |
 | BUG-6 | Partial photo-save failure is invisible (B3) | S3 | M |
-| BUG-7 | No SQLite `busy_timeout` | S3 | S |
-| BUG-8 | Interest form accepts enquiries on sold items | S3 | S |
+| BUG-7 | No SQLite `busy_timeout` | S3 | S | **Done** |
+| BUG-8 | Interest form accepts enquiries on sold items | S3 | S | **Done** |
 | BUG-9 | Item deletion is irreversible, including photos | S3 | M |
 
 **BUG-1 through BUG-4 — all closed 2026-07-26.** See §0 for the delivery-state
@@ -250,6 +250,28 @@ clear "already sold" message instead.
 photo directory. `hx-confirm` exists, but one mis-click permanently destroys
 photos that may not exist anywhere else. Prefer a `deleted_at` soft delete;
 purge on a schedule.
+
+---
+
+**BUG-7 — `busy_timeout`.** *Done.* `PRAGMA busy_timeout = 5000` in
+`database.Init`. Without it a write that finds the database locked failed
+*instantly* with SQLITE_BUSY rather than waiting. `SetMaxOpenConns(1)`
+serialises this process's own access, so the contention that mattered came from
+outside it: `scripts/maintenance.sh` runs `.backup` against the live database
+nightly, and `sqlite3 prebuilt.db` is the documented way to edit the colour
+tables. Either could hold a lock long enough that a contact form submitted at
+that moment would have errored and told a real customer to call instead. Five
+seconds is far longer than any of those legitimately take, so this converts a
+rare hard failure into an unnoticed pause. Verified against the live
+connection, not just the source.
+
+**BUG-8 — Sold items.** *Done.* `InstockInterest` re-checks status after
+loading the item. Sold sheds deliberately stay on the page with a SOLD ribbon
+as proof inventory moves, so the form is still rendered against them — which
+makes status precisely the field that can change between render and submit, and
+therefore one that cannot be trusted from the client. On-hold is still allowed:
+holds fall through regularly, and a second interested buyer is information the
+business wants. Mutation-tested.
 
 ---
 
@@ -339,9 +361,9 @@ immutable`. Only worth it once the design settles.
 
 | ID | Item | Sev | Effort |
 |---|---|---|---|
-| SEO-1 | No Open Graph / Twitter Card tags | S2 | S |
+| SEO-1 | No Open Graph / Twitter Card tags | S2 | S | **Done** |
 | SEO-2 | No `LocalBusiness` structured data | S2 | M |
-| SEO-3 | No canonical link tags | S3 | S |
+| SEO-3 | No canonical link tags | S3 | S | **Done** |
 | SEO-4 | No Google Business Profile linkage | S2 | S |
 | SEO-5 | Sitemap is static and hand-maintained | S3 | S |
 | SEO-6 | No analytics | S3 | S |
@@ -365,6 +387,22 @@ and flag state removes the coupling.
 **SEO-6.** No analytics at all — there is currently no way to know whether the
 site produces business. Plausible/Fathom avoid a cookie banner (see `LEGAL-1`);
 GA4 does not.
+
+---
+
+**SEO-1 / SEO-3 — Open Graph, Twitter Cards, canonical.** *Done.* Both need
+absolute URLs, so `SITE_URL` was added to `Config` and exposed to templates as
+`siteURL`. The whole block is gated on it being set: with `SITE_URL` unset the
+tags are omitted entirely rather than emitted with an empty origin, because a
+canonical pointing nowhere actively tells search engines the real page lives
+somewhere else — strictly worse than having none. `twitter:card` is
+`summary_large_image`, which is what turns a shared link into a full-width photo
+rather than a thumbnail; for a business that sells on how its work looks, that
+is the entire point.
+
+Outstanding: `og:image` currently reuses `hero-image.jpg`. A purpose-made
+1200×630 crops far better — Facebook and LinkedIn letterbox anything far from
+that ratio. Marked with a `REPLACE` comment in `layout.html`.
 
 ---
 

@@ -187,6 +187,12 @@ func newServer(cfg Config) (*echo.Echo, error) {
 		// the contact form is a partial of the homepage, so threading it through
 		// would mean editing every handler that renders a page containing a form.
 		"formTS": func() string { return strconv.FormatInt(time.Now().Unix(), 10) },
+		// Public origin for canonical links and Open Graph tags, both of which
+		// must be absolute. Returns "" when unset, and the templates gate the
+		// whole block on that — emitting a canonical pointing at nothing is
+		// worse than emitting none, because it actively tells search engines
+		// the real page is elsewhere.
+		"siteURL": func() string { return cfg.SiteURL },
 	}
 
 	// Was template.Must, which panics with a stack trace when a glob matches

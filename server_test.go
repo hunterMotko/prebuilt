@@ -5,8 +5,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -381,5 +383,97 @@ func TestNewServerReportsTemplateErrors(t *testing.T) {
 
 	if _, err := newServer(testConfig()); err == nil {
 		t.Error("newServer succeeded with no templates on disk")
+	}
+}
+
+// SEO tags must carry absolute URLs, and must be omitted entirely rather than
+// emitted with an empty origin. A canonical pointing at nothing actively tells
+// search engines the real page lives elsewhere — strictly worse than none.
+func TestSEOTagsRequireSiteURL(t *testing.T) {
+	withoutURL := get(t, newTestServer(t, testConfig()), "/").Body.String()
+	for _, tag := range []string{"canonical", "og:url", "og:image", "twitter:card"} {
+		if strings.Contains(withoutURL, tag) {
+			t.Errorf("%s emitted with SITE_URL unset", tag)
+		}
+	}
+
+	cfg := testConfig()
+	cfg.SiteURL = "https://example.com"
+	body := get(t, newTestServer(t, cfg), "/").Body.String()
+
+	for _, want := range []string{
+		`<link rel="canonical" href="https://example.com/">`,
+		`property="og:url" content="https://example.com/"`,
+		`content="https://example.com/public/images/hero-image.jpg"`,
+		`name="twitter:card" content="summary_large_image"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing SEO tag: %s", want)
+		}
+	}
+
+	// A trailing slash on SITE_URL must not produce "https://example.com//".
+	cfg.SiteURL = "https://example.com/"
+	cfg2 := loadConfigFrom(cfg.SiteURL)
+	if strings.HasSuffix(cfg2, "/") {
+		t.Errorf("SiteURL kept its trailing slash: %q", cfg2)
+	}
+}
+
+// loadConfigFrom exercises the trailing-slash trimming in loadConfig without
+// depending on process-wide environment state in a parallel test run.
+func loadConfigFrom(raw string) string {
+	prev := os.Getenv("SITE_URL")
+	defer os.Setenv("SITE_URL", prev)
+	os.Setenv("SITE_URL", raw)
+	return loadConfig().SiteURL
+}
+
+// Sold sheds stay on the page with a SOLD ribbon, as visible proof that
+// inventory moves, so the interest form is still rendered against them. Status
+// is therefore exactly the field that can change between render and submit, and
+// has to be re-checked server-side.
+func TestInterestFormRejectsSoldItems(t *testing.T) {
+	cfg := testConfig()
+	cfg.FeatureInstock = true
+	e := newTestServer(t, cfg)
+
+	inStockID, err := database.CreateInventoryItem(database.InventoryItem{
+		Lot: 1, Style: database.StyleGable, Width: 12, Length: 24,
+		SidingCode: "30", RoofCode: "20", Status: database.StatusInStock,
+	})
+	if err != nil {
+		t.Fatalf("seed in-stock item: %v", err)
+	}
+	soldID, err := database.CreateInventoryItem(database.InventoryItem{
+		Lot: 1, Style: database.StyleGable, Width: 12, Length: 24,
+		SidingCode: "30", RoofCode: "20", Status: database.StatusInStock,
+	})
+	if err != nil {
+		t.Fatalf("seed sold item: %v", err)
+	}
+	if err := database.UpdateInventoryItemStatus(soldID, database.StatusSold); err != nil {
+		t.Fatalf("mark sold: %v", err)
+	}
+
+	post := func(itemID int64) *httptest.ResponseRecorder {
+		form := "item_id=" + strconv.FormatInt(itemID, 10) +
+			"&name=Jane&phone=5550000&email=jane@example.com" +
+			"&form_ts=" + strconv.FormatInt(time.Now().Add(-time.Minute).Unix(), 10)
+		req := httptest.NewRequest(http.MethodPost, "/instock/interest", strings.NewReader(form))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		return do(t, e, req)
+	}
+
+	if rec := post(inStockID); rec.Code != http.StatusOK {
+		t.Errorf("in-stock item = %d, want 200", rec.Code)
+	}
+
+	rec := post(soldID)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("sold item = %d, want 422", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "has sold") {
+		t.Errorf("sold item response did not explain why: %s", rec.Body.String())
 	}
 }

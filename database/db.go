@@ -94,6 +94,21 @@ func Init(path string) {
 		log.Fatal("failed to enable foreign keys:", err)
 	}
 
+	// Without this, a write that finds the database locked fails INSTANTLY with
+	// SQLITE_BUSY instead of waiting. SetMaxOpenConns(1) above serialises this
+	// process's own access, so the lock contention that matters comes from
+	// outside it: scripts/maintenance.sh runs `.backup` against the live
+	// database nightly, and `sqlite3 prebuilt.db` is the documented way to edit
+	// the colour reference tables. Either can hold a lock for long enough that
+	// a contact form submitted at that moment would have errored and told a
+	// real customer to call instead.
+	//
+	// Five seconds is far longer than any operation here legitimately takes, so
+	// in practice this converts a rare hard failure into an unnoticed pause.
+	if _, err := DB.Exec(`PRAGMA busy_timeout = 5000`); err != nil {
+		log.Fatal("failed to set busy_timeout:", err)
+	}
+
 	createTables()
 	createInventoryTables()
 }
