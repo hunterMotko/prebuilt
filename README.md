@@ -1,0 +1,176 @@
+# Prebuilt Sheds LLC
+
+Marketing site and inventory system for a shed builder. Server-rendered Go,
+SQLite, and htmx — one static binary, no frontend build step, no runtime
+dependencies beyond the container.
+
+---
+
+## Stack
+
+| | |
+|---|---|
+| Runtime | Go 1.22, Echo v4 |
+| Views | `html/template`, htmx 1.9 (self-hosted) |
+| Storage | SQLite via `modernc.org/sqlite` (pure Go, no cgo) |
+| Deploy | Docker, nginx + certbot on the host |
+
+Four direct dependencies. No ORM, no JS toolchain, no CSS framework.
+
+---
+
+## Architecture
+
+```
+main.go          routing, middleware, template registry, feature flags
+handlers/        one file per route group; HTTP concerns only
+database/        schema, migrations, queries; no HTTP awareness
+templates/       layout + partials; admin has its own template set
+public/          static assets, uploaded photos
+deploy/          nginx server block
+```
+
+Requests are server-rendered end to end. htmx handles the two interactions that
+benefit from partial updates — contact submission and admin status changes — by
+swapping HTML fragments returned from the same handlers. No client-side state,
+no JSON API, no hydration.
+
+**Routes.** Public: `/`, `/contact`, `/instock`. Admin: `/admin/*` behind auth,
+CSRF, and a separate body limit. `robots.txt` and `sitemap.xml` are served from
+the root, not `/public`.
+
+---
+
+## Engineering notes
+
+Decisions that aren't obvious from reading the code:
+
+**Pure-Go SQLite.** `modernc.org/sqlite` compiles without cgo, so
+`CGO_ENABLED=0` produces a static binary and the runtime image needs no libc
+matching. Trades some raw speed for a materially simpler build and image.
+
+**Connection pool pinned to one connection.** SQLite's `PRAGMA foreign_keys` is
+per-connection, and `database/sql` pools transparently. Without
+`SetMaxOpenConns(1)`, the `ON DELETE CASCADE` on inventory photos would apply
+only on whichever connection happened to run the pragma. SQLite serializes
+writes regardless, so at this scale the pool bought nothing.
+
+**Money is `int64` cents, rounded not truncated.** `int64(dollars * 100)`
+silently loses a cent when float multiplication lands just under the integer
+(`19.99 * 100` → `1998.9999999999998`). Uses `math.Round`, with a regression
+test.
+
+**Uploads validate before anything commits.** Size, count, and real content
+type (sniffed from bytes, not the extension) are all checked before the item
+row is created or a file is written, so a rejected upload can't leave an
+orphaned record or a half-applied edit. Stored filenames are server-generated;
+the client's filename is never trusted or echoed back.
+
+**Escaping lives in one function.** Error fragments render through a single
+helper that escapes unconditionally, rather than relying on ~26 call sites to
+remember. Echo's `c.HTML` does not auto-escape.
+
+**Feature flags gate routes, not just links.** A disabled feature's routes are
+never registered, so the page 404s instead of sitting unlinked but reachable.
+Exposed to templates as a function so shared partials need no data plumbing.
+
+**Schema changes follow SQLite's table-rebuild procedure.** No
+`ALTER TABLE ADD CONSTRAINT` exists, so adding CHECK constraints rebuilds the
+table inside a transaction and verifies referential integrity afterward.
+Migrations are idempotent and guarded — safe to run on every boot.
+
+---
+
+## Security
+
+- CSRF on all admin mutations, covering both form posts and htmx requests;
+  cookie explicitly scoped to `/admin`, `SameSite=Strict`, `Secure` in production
+- Per-IP rate limiting on public form endpoints
+- `nosniff`, `X-Frame-Options`, and HSTS (set explicitly — Echo's default
+  `HSTSMaxAge` is `0`, which silently disables it)
+- Body limits scoped per route group; uploads capped by size, count, and type
+- Auth fails closed when misconfigured; constant-time credential comparison
+- Server timeouts and graceful shutdown
+- Container runs as a non-root user; the app binds to loopback only
+
+---
+
+## Local development
+
+```bash
+cp .env.example .env
+go run .                      # :8080
+```
+
+```bash
+make            # list targets
+make test       # unit tests
+make smoke      # 43 end-to-end checks against a real binary
+make ci         # everything CI runs, ~13s
+```
+
+Templates and CSS are read from disk at startup; restart to pick up changes.
+
+`make smoke` exercises routing, auth, CSRF via both token sources, security
+headers, body limits, rate limiting, and the form spam defences against a real
+running binary. Output is deterministic, so capturing it before and after a
+dependency change reduces the review to a `diff`. It runs against a temporary
+database with SMTP forced empty and never touches `prebuilt.db`.
+
+CI calls these same `make` targets rather than restating commands in YAML, so
+the pipeline is reproducible locally and cannot drift from what developers run.
+`make check-docker-go` asserts the Dockerfile's builder image satisfies the `go`
+directive — a dependency upgrade that raises it otherwise breaks the deploy
+while passing every local check.
+
+## Configuration
+
+Set via environment or `.env`. Unset flags default to off.
+
+| Variable | Purpose |
+|---|---|
+| `PORT` | Listen port (default `8080`) |
+| `DB_PATH` | SQLite file location (default `./prebuilt.db`) |
+| `SMTP_*`, `CONTACT_EMAIL` | Contact form delivery; skipped if unset |
+| `ADMIN_USER`, `ADMIN_PASS` | Admin credentials |
+| `TRUST_PROXY` | Read client IP from `X-Forwarded-For`. Required behind nginx |
+| `COOKIE_SECURE` | Mark cookies `Secure`. Requires HTTPS |
+| `FEATURE_INSTOCK` | Enables the public inventory page |
+| `CSP_REPORT_ONLY` | Report CSP violations instead of blocking. Use on first deploy after a policy change |
+
+## Deployment
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+nginx and certbot run on the host and terminate TLS. The app runs in Docker and
+binds to loopback only — Docker writes its own iptables rules that bypass the
+host firewall, so publishing to `0.0.0.0` would expose the app directly no
+matter what ufw says.
+
+The database and uploads use named volumes rather than bind mounts. Docker seeds
+a named volume with the ownership baked into the image, so the container's
+non-root user can write without any host-side `chown`. `restart: unless-stopped`
+covers crashes and reboots; container logs are size-capped so they cannot fill
+the disk and stall SQLite writes.
+
+Two settings are mandatory behind the proxy and are set in compose:
+`TRUST_PROXY`, so per-IP rate limiting sees the real client rather than nginx,
+and `COOKIE_SECURE`. The server block is in `deploy/nginx.conf.example` — note
+its `client_max_body_size`, which must be at least the app's upload limit or
+nginx rejects photo uploads with a 413 before the request ever reaches a
+handler.
+
+Provisioning, DNS, and certificate issuance are covered in an operational
+runbook maintained outside this repository.
+
+---
+
+## Status
+
+The marketing site and contact flow are production-ready. The inventory page is
+built and feature-flagged off pending real inventory data. Session-based admin
+auth is specified but not yet implemented — the admin panel currently uses HTTP
+Basic Auth, which has no logout. Backups are not yet automated.
