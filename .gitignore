@@ -6,6 +6,7 @@ notes.txt
 reviews.txt
 backups/
 
+deploy/DEPLOY.md
 AUDIT_CHECKLIST.md
 # Docker bind-mount target: the deployed SQLite database and uploaded photos.
 data/
