@@ -23,6 +23,8 @@
     <meta name="twitter:image" content="{{siteURL}}/public/images/hero-image.jpg">
     {{end}}
 
+    {{template "structured_data.html" .}}
+
     <link rel="icon" type="image/png" href="/public/images/pbs-logo.png">
     <link rel="stylesheet" href="/public/css/style.css">
     <script src="/public/js/htmx.min.js" defer></script>
@@ -164,7 +166,7 @@
     <div class="instock-img-wrap"{{if gt (len .Images) 1}} data-carousel{{end}}>
         {{if .Images}}
         {{range $i, $img := .Images}}
-        <img src="/public/images/inventory/{{$.ID}}/{{$img.Filename}}" alt="{{$.Label}}" class="instock-img carousel-slide{{if eq $i 0}} active{{end}}">
+        <img src="/public/images/inventory/{{$.ID}}/{{$img.Filename}}" alt="{{$.Label}}" class="instock-img carousel-slide{{if eq $i 0}} active{{end}}" loading="lazy" decoding="async">
         {{end}}
         {{if gt (len .Images) 1}}
         <button class="carousel-btn carousel-prev" aria-label="Previous photo">&#8249;</button>

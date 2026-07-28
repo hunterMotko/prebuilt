@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -475,5 +477,71 @@ func TestInterestFormRejectsSoldItems(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "has sold") {
 		t.Errorf("sold item response did not explain why: %s", rec.Body.String())
+	}
+}
+
+// Malformed JSON-LD is silently ignored by search engines — there is no error
+// anywhere, the rich result simply never appears. That makes it exactly the
+// kind of thing worth asserting in a test rather than eyeballing.
+func TestStructuredDataIsValidJSON(t *testing.T) {
+	if body := get(t, newTestServer(t, testConfig()), "/").Body.String(); strings.Contains(body, "application/ld+json") {
+		t.Error("structured data emitted with SITE_URL unset; @id and url would be relative")
+	}
+
+	cfg := testConfig()
+	cfg.SiteURL = "https://example.com"
+	body := get(t, newTestServer(t, cfg), "/").Body.String()
+
+	m := regexp.MustCompile(`(?s)<script type="application/ld\+json">(.*?)</script>`).FindStringSubmatch(body)
+	if m == nil {
+		t.Fatal("no JSON-LD block rendered")
+	}
+
+	var data map[string]any
+	if err := json.Unmarshal([]byte(m[1]), &data); err != nil {
+		t.Fatalf("JSON-LD is not valid JSON: %v", err)
+	}
+
+	if data["name"] != "Prebuilt Sheds LLC" {
+		t.Errorf("name = %v", data["name"])
+	}
+	if data["url"] != "https://example.com/" {
+		t.Errorf("url = %v", data["url"])
+	}
+
+	// Address, areaServed and sameAs must stay absent until they can be copied
+	// verbatim from the Google Business Profile. A NAP mismatch actively
+	// suppresses local ranking, so a guessed address is worse than none.
+	for _, k := range []string{"address", "areaServed", "sameAs"} {
+		if _, present := data[k]; present {
+			t.Errorf("%q is populated — verify it matches the Business Profile exactly, then remove this assertion", k)
+		}
+	}
+}
+
+// Images below the fold must not block the initial load. The homepage carries
+// ~35 photos at several hundred KB each; without lazy loading every one is
+// fetched before the page settles.
+func TestImagesAreLazyLoaded(t *testing.T) {
+	body := get(t, newTestServer(t, testConfig()), "/").Body.String()
+
+	imgs := regexp.MustCompile(`<img\b[^>]*>`).FindAllString(body, -1)
+	if len(imgs) < 30 {
+		t.Fatalf("found %d <img> tags, expected the full gallery", len(imgs))
+	}
+
+	var eager []string
+	for _, tag := range imgs {
+		// The nav logo is above the fold and must stay eager; the lightbox
+		// image has no src until JS sets one.
+		if strings.Contains(tag, "nav-logo-img") || strings.Contains(tag, "lightbox-img") {
+			continue
+		}
+		if !strings.Contains(tag, `loading="lazy"`) {
+			eager = append(eager, tag)
+		}
+	}
+	if len(eager) > 0 {
+		t.Errorf("%d below-the-fold images load eagerly, e.g. %s", len(eager), eager[0])
 	}
 }

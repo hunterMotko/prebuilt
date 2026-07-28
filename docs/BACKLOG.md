@@ -332,10 +332,10 @@ Tagged images in a registry would make rollback a pull.
 | ID | Item | Sev | Effort |
 |---|---|---|---|
 | PERF-1 | Photos served at full size; no thumbnails | S2 | L |
-| PERF-2 | No `loading="lazy"` on images | S2 | S |
-| PERF-3 | Source images ~0.7–0.9 MB each, unoptimised | S2 | M |
+| PERF-2 | No `loading="lazy"` on images | S2 | S | **Done** |
+| PERF-3 | Source images ~0.7–0.9 MB each, unoptimised | S2 | M | Blocked on tooling |
 | PERF-4 | Static assets are `no-cache` | S3 | M |
-| PERF-5 | No width/height on some images (layout shift) | S3 | S |
+| PERF-5 | No width/height on some images (layout shift) | S3 | S | **Done** |
 
 **PERF-1.** *Verified.* Uploads are capped at 8 MB each and stored as-is; the
 public page renders the originals. Twelve photos on one shed is a ~100 MB page
@@ -357,14 +357,50 @@ immutable`. Only worth it once the design settles.
 
 ---
 
+**PERF-2 — Lazy loading.** *Done.* 35 below-the-fold images now carry
+`loading="lazy" decoding="async"`. This is the large win on this page: the
+homepage renders ~35 photos averaging several hundred KB, and every one of them
+was previously fetched before the page settled — several megabytes to display a
+hero the visitor sees immediately. The nav logo stays eager (above the fold),
+and the lightbox image is excluded since it has no `src` until JS sets one.
+
+**PERF-5 — Dimensions.** *Done, with a caveat worth recording.* 36 of 39 `<img>`
+tags now carry `width`/`height` read off the actual files. The honest
+assessment: this buys **almost no CLS improvement here**, because
+`.gallery-img`, `.style-img` and `.instock-img` already pin *both* dimensions in
+CSS with `object-fit: cover`, so the layout was never shifting. The attributes
+are worth keeping as defence if a fixed height is ever removed, and Lighthouse
+flags their absence regardless — but the layout-shift framing in the original
+item did not apply to this codebase.
+
+**PERF-3 — Image weight.** *Blocked on tooling, and smaller than assumed.*
+Measured rather than estimated:
+
+| Variant | Size |
+|---|---|
+| Original, progressive JPEG @2048px | 932 KB |
+| `sips` re-encode @1600px q80 | **952 KB** (larger) |
+| `cwebp` q82 @2048px | **1032 KB** (larger) |
+| `cwebp` q82 @1600px | 584 KB |
+
+The sources are already progressive JPEGs and reasonably encoded. `sips`
+outputs baseline JPEG and inflates them; WebP at equal dimensions is worse for
+these particular photos. The only genuine remaining win is **resizing** — they
+are 2048px wide and rendered at a few hundred CSS pixels — which needs a proper
+encoder (`mozjpeg` or `jpegoptim`, neither installed). Deferred rather than
+done badly. Combined with PERF-2 already deferring the download entirely, the
+urgency dropped considerably.
+
+---
+
 ## 5. SEO and discoverability
 
 | ID | Item | Sev | Effort |
 |---|---|---|---|
 | SEO-1 | No Open Graph / Twitter Card tags | S2 | S | **Done** |
-| SEO-2 | No `LocalBusiness` structured data | S2 | M |
+| SEO-2 | No `LocalBusiness` structured data | S2 | M | **Done** |
 | SEO-3 | No canonical link tags | S3 | S | **Done** |
-| SEO-4 | No Google Business Profile linkage | S2 | S |
+| SEO-4 | No Google Business Profile linkage | S2 | S | Needs your data |
 | SEO-5 | Sitemap is static and hand-maintained | S3 | S |
 | SEO-6 | No analytics | S3 | S |
 
@@ -403,6 +439,29 @@ is the entire point.
 Outstanding: `og:image` currently reuses `hero-image.jpg`. A purpose-made
 1200×630 crops far better — Facebook and LinkedIn letterbox anything far from
 that ratio. Marked with a `REPLACE` comment in `layout.html`.
+
+---
+
+**SEO-2 / SEO-4 — Structured data and Business Profile.** *Partially done —
+needs data only you have.* `templates/partials/structured_data.html` emits
+`GeneralContractor` JSON-LD on both public pages, gated on `SITE_URL` because
+`@id` and `url` must be absolute. Validated in a test: malformed JSON-LD is
+silently ignored by search engines, with no error anywhere — the rich result
+just never appears.
+
+Populated from verifiable facts only: name, url, logo, image, description,
+telephone, and Mon–Sat 08:00–18:00 hours taken from `contact.html`.
+
+**`address`, `areaServed` and `sameAs` are deliberately omitted, not
+forgotten.** Google cross-checks name/address/phone against the Business
+Profile, and a mismatch *suppresses* local ranking rather than merely failing to
+help — a guessed address is an active penalty. The file carries instructions;
+`sameAs` holding the Business Profile URL is the actual site-to-profile link
+that SEO-4 asks for. A test asserts these stay absent, and names itself as the
+thing to remove once the real values are in.
+
+Note: `application/ld+json` is a data block, not executable script, so
+`script-src 'self'` does not block it — no nonce or policy change needed.
 
 ---
 
