@@ -15,8 +15,22 @@
 
 services:
   app:
+    # Both keys are set on purpose, and which one wins is decided by the
+    # command, not by this file:
+    #
+    #   local   docker compose up -d --build      builds, tags it as below
+    #   VPS     docker compose pull               downloads the built image
+    #           docker compose up -d --no-build   refuses to compile
+    #
+    # --no-build is not optional on the server. With `build:` present, a plain
+    # `up -d` with no image cached will silently start compiling instead, and
+    # modernc.org/sqlite is a single 8.6 MB generated source file that takes
+    # minutes on one vCPU — the exact failure mode this setup exists to end.
+    #
+    # IMAGE_TAG pins a rollback target: `IMAGE_TAG=sha-1a2b3c4 docker compose
+    # up -d`. `latest` is a moving tag and cannot be rolled back to.
     build: .
-    image: prebuilt-sheds:latest
+    image: ghcr.io/huntermotko/prebuilt:${IMAGE_TAG:-latest}
     container_name: prebuilt-sheds
     restart: unless-stopped
 
