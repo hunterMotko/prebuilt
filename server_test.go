@@ -315,6 +315,25 @@ func TestSEODocsPreferSiteURL(t *testing.T) {
 	}
 }
 
+// Regression test for a red CI run on main. POST /contact returns as soon as
+// the row is saved and then writes the email status from a goroutine; under
+// SQLite's default rollback-journal mode that write takes an EXCLUSIVE lock
+// that blocks every reader, so anything querying the database in that window
+// failed with "database is locked". Under WAL, readers never block on a writer.
+//
+// Asserted by reading the mode back rather than trusting the statement:
+// journal_mode returns the mode actually in force, and SQLite reports success
+// while silently keeping the old one if the switch cannot be made.
+func TestDatabaseUsesWAL(t *testing.T) {
+	var mode string
+	if err := database.DB.QueryRow(`PRAGMA journal_mode`).Scan(&mode); err != nil {
+		t.Fatalf("reading journal_mode: %v", err)
+	}
+	if !strings.EqualFold(mode, "wal") {
+		t.Errorf("journal_mode = %q, want wal", mode)
+	}
+}
+
 func TestAdminRequiresAuth(t *testing.T) {
 	e := newTestServer(t, testConfig())
 

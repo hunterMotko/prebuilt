@@ -79,6 +79,21 @@ check() {
 # status <curl args...> -> HTTP status code
 status() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 
+# Every read of the database goes through here, never bare `sqlite3`.
+#
+# busy_timeout is per connection, and the CLI is a different process from the
+# server, so it does NOT inherit the app's 5s — it gets SQLite's default of 0,
+# which means "fail immediately on any lock". POST /contact returns as soon as
+# the row is saved and then writes the email status from a goroutine, so a query
+# issued on the next line lands inside that write and died with "database is
+# locked". Intermittent by nature: it passed locally and on the PR, and only
+# went red on main.
+#
+# The app now also runs in WAL mode, under which these reads would not block at
+# all. This stays because it is the correct way to invoke the CLI regardless,
+# and it still covers the cases WAL does not — a write, or a checkpoint.
+sq() { sqlite3 -cmd '.timeout 5000' "$@"; }
+
 # Checked up front so a missing tool reports itself rather than surfacing as a
 # wall of failed assertions with empty "got=" values, which is how this looks
 # on a CI runner that happens not to ship sqlite3.
@@ -170,9 +185,9 @@ create_status="$(status -u "$USER:$PASS" -b "$JAR" -c "$JAR" -X POST "${BASE}/ad
 	-F "csrf=${token}" -F 'lot=1' -F 'style=Gable' -F 'width=12' -F 'length=24' \
 	-F 'siding_code=30' -F 'roof_code=20' -F 'price=4999' -F 'notes=smoke test')"
 check "POST /admin/inventory (form token)" 303 "$create_status"
-check "item persisted"              1 "$(sqlite3 "$DB" 'SELECT COUNT(*) FROM inventory_items;')"
+check "item persisted"              1 "$(sq "$DB" 'SELECT COUNT(*) FROM inventory_items;')"
 
-item_id="$(sqlite3 "$DB" 'SELECT id FROM inventory_items LIMIT 1;')"
+item_id="$(sq "$DB" 'SELECT id FROM inventory_items LIMIT 1;')"
 check "GET /admin/inventory/:id/edit" 200 \
 	"$(status -u "$USER:$PASS" "${BASE}/admin/inventory/${item_id}/edit")"
 
@@ -182,7 +197,7 @@ check "POST status (header token)"  200 \
 		-H "X-CSRF-Token: ${token}" \
 		"${BASE}/admin/inventory/${item_id}/status" -d 'status=sold')"
 check "status change persisted"     sold \
-	"$(sqlite3 "$DB" "SELECT status FROM inventory_items WHERE id=${item_id};")"
+	"$(sq "$DB" "SELECT status FROM inventory_items WHERE id=${item_id};")"
 check "POST bogus status rejected"  422 \
 	"$(status -u "$USER:$PASS" -b "$JAR" -c "$JAR" -X POST \
 		-H "X-CSRF-Token: ${token}" \
@@ -198,7 +213,7 @@ check "POST /contact missing field" 422 "$(status -X POST "${BASE}/contact" -d '
 # that can tell it was filtered is a bot that adapts.
 check "POST /contact honeypot"      200 "$(status -X POST "${BASE}/contact" -d "${form}&form_ts=${old_ts}&contact_ref=spam")"
 check "POST /contact instant submit" 200 "$(status -X POST "${BASE}/contact" -d "${form}&form_ts=$(date +%s)")"
-check "only the real lead saved"    1 "$(sqlite3 "$DB" 'SELECT COUNT(*) FROM contact_submissions;')"
+check "only the real lead saved"    1 "$(sq "$DB" 'SELECT COUNT(*) FROM contact_submissions;')"
 check "spam rejections logged"      2 "$(grep -c spam_rejected "$SRV_LOG")"
 
 echo
