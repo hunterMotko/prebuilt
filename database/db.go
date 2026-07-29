@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -107,6 +108,49 @@ func Init(path string) {
 	// in practice this converts a rare hard failure into an unnoticed pause.
 	if _, err := DB.Exec(`PRAGMA busy_timeout = 5000`); err != nil {
 		log.Fatal("failed to set busy_timeout:", err)
+	}
+
+	// WAL, set after busy_timeout so the mode switch itself can wait for a lock
+	// rather than failing outright.
+	//
+	// In SQLite's default rollback-journal mode a writer escalates to an
+	// EXCLUSIVE lock at COMMIT, and for that window no other process can read.
+	// The window is short — a transaction holds only a RESERVED lock until it
+	// commits, and readers are fine during that part — which is precisely why
+	// the resulting failure is intermittent rather than obvious.
+	//
+	// It took a red CI run on main to expose one: POST /contact returns as soon
+	// as the row is saved, then a background goroutine writes the email status.
+	// A reader landing in that commit window got SQLITE_BUSY, because
+	// busy_timeout is per connection and a separate process gets SQLite's
+	// default of 0, meaning "fail immediately".
+	//
+	// Measured against this exact topology — one long-lived writer connection,
+	// as the pool holds here, plus short-lived reader processes — 200 reads at
+	// timeout 0 lost 19 times under rollback-journal and 0 times under WAL.
+	//
+	// The same measurement with short-lived WRITER processes inverts: WAL loses
+	// more, because the last connection to close attempts a checkpoint and needs
+	// exclusive access. That is not this server, which holds one connection for
+	// the process lifetime, but it does apply to the documented habit of editing
+	// the colour tables with `sqlite3 prebuilt.db` — occasional manual use, so
+	// it costs nothing here, but it is the reason WAL is not a free win in
+	// general.
+	//
+	// Unlike foreign_keys and busy_timeout, journal_mode is a persistent
+	// property of the file, not the connection, so this survives restarts and
+	// applies to every process that opens the database — including the sqlite3
+	// CLI. Queried rather than Exec'd because the statement RETURNS the mode
+	// actually in force, and SQLite reports success while silently keeping the
+	// old mode if the switch cannot be made.
+	var journalMode string
+	if err := DB.QueryRow(`PRAGMA journal_mode = WAL`).Scan(&journalMode); err != nil {
+		log.Fatal("failed to set journal_mode:", err)
+	}
+	if !strings.EqualFold(journalMode, "wal") {
+		log.Fatalf("journal_mode is %q, not WAL — the database directory must be on a "+
+			"filesystem that supports shared memory (a bind mount of the .db file alone, "+
+			"or a network filesystem, will do this)", journalMode)
 	}
 
 	createTables()
