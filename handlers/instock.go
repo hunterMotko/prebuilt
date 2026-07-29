@@ -122,6 +122,20 @@ func InstockInterest(c echo.Context) error {
 		return c.HTML(http.StatusUnprocessableEntity, errorHTML("That shed is no longer available. Please try another from the In Stock page."))
 	}
 
+	// Sold sheds stay on the page with a SOLD ribbon, as visible proof that
+	// inventory moves — so the interest form is still rendered against them,
+	// and a customer who loaded the page before a sale (or who scrolled to the
+	// Sold tab) can still submit. Checked here rather than trusted from the
+	// client because the status is exactly the field that changes between
+	// render and submit.
+	//
+	// On-hold is deliberately still allowed: holds fall through regularly, and
+	// a second interested buyer is information the business wants.
+	if item.Status == database.StatusSold {
+		return c.HTML(http.StatusUnprocessableEntity, errorHTML(
+			"Sorry — that shed has sold. Have a look at what's still in stock, or call us and we can build the same model."))
+	}
+
 	details := fmt.Sprintf("Interested in in-stock shed: %s\n%s", database.GenerateCode(item), database.Describe(item))
 	if message != "" {
 		details += "\n\nCustomer message:\n" + message

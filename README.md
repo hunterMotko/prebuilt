@@ -10,7 +10,7 @@ dependencies beyond the container.
 
 | | |
 |---|---|
-| Runtime | Go 1.22, Echo v4 |
+| Runtime | Go 1.25+, Echo v4 |
 | Views | `html/template`, htmx 1.9 (self-hosted) |
 | Storage | SQLite via `modernc.org/sqlite` (pure Go, no cgo) |
 | Deploy | Docker, nginx + certbot on the host |
@@ -22,7 +22,9 @@ Four direct dependencies. No ORM, no JS toolchain, no CSS framework.
 ## Architecture
 
 ```
-main.go          routing, middleware, template registry, feature flags
+main.go          process lifecycle: config, storage, signals, shutdown
+server.go        the wired Echo instance: middleware, templates, routes
+config.go        every environment-driven setting, resolved once
 handlers/        one file per route group; HTTP concerns only
 database/        schema, migrations, queries; no HTTP awareness
 templates/       layout + partials; admin has its own template set
@@ -65,6 +67,13 @@ type (sniffed from bytes, not the extension) are all checked before the item
 row is created or a file is written, so a rejected upload can't leave an
 orphaned record or a half-applied edit. Stored filenames are server-generated;
 the client's filename is never trusted or echoed back.
+
+**The server is built by a function, not by `main()`.** `newServer(cfg)` returns
+a fully wired instance and starts nothing, so tests exercise the real middleware
+chain rather than a reconstruction of it. Middleware ordering, a group's
+auto-registered `RouteNotFound`, and nested body limits are properties of that
+function alone — asserting them against a hand-built `echo.New()` would pass
+through exactly the regressions worth catching.
 
 **Escaping lives in one function.** Error fragments render through a single
 helper that escapes unconditionally, rather than relying on ~26 call sites to
@@ -136,6 +145,7 @@ Set via environment or `.env`. Unset flags default to off.
 | `TRUST_PROXY` | Read client IP from `X-Forwarded-For`. Required behind nginx |
 | `COOKIE_SECURE` | Mark cookies `Secure`. Requires HTTPS |
 | `FEATURE_INSTOCK` | Enables the public inventory page |
+| `SITE_URL` | Public origin. Enables canonical and Open Graph tags |
 | `CSP_REPORT_ONLY` | Report CSP violations instead of blocking. Use on first deploy after a policy change |
 
 ## Deployment

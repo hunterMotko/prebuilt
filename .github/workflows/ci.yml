@@ -16,9 +16,14 @@ permissions:
 
 # A second push to the same branch cancels the first. Nothing here is worth
 # paying for twice, and the older run's result is already stale.
+#
+# Except on main, where the run also publishes an image. Cancelling mid-push
+# cannot corrupt a tag — the manifest is written last, so a half-uploaded image
+# is invisible — but it can leave `latest` pointing at the older commit while
+# the newer one reports success, which is a confusing state to debug.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   check:
@@ -97,3 +102,64 @@ jobs:
       # about the Dockerfile for an entire development cycle without ever
       # building it — this job is what stops that recurring.
       - run: make docker-smoke
+
+  publish:
+    name: Publish image to GHCR
+    # The whole reason this lives in ci.yml instead of its own cd.yml: `needs`
+    # is enforced by the job graph, so an image physically cannot reach the
+    # registry unless the tests, the vulnerability scan, and the container
+    # smoke test all went green. A separate workflow would have to chain off
+    # `workflow_run`, which fires regardless of conclusion and has to be
+    # re-checked by hand.
+    needs: [check, vuln, docker]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    # Narrower than a file-level grant: this is the only job that may write to
+    # the registry, so a compromised action in any other job cannot publish.
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # GITHUB_TOKEN, not a PAT. It is minted per-run, expires with the run,
+      # and is already scoped by the `permissions` block above — there is no
+      # long-lived secret to rotate or leak.
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Two tags on every push, and the sha- one is the important half:
+      # `latest` is a moving target, so it cannot be rolled back to. sha-<short>
+      # is immutable and is what a rollback pins to.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=short
+
+      # linux/amd64 only. Adding linux/arm64 roughly doubles the job's runtime
+      # because modernc.org/sqlite is an 8.6 MB generated source file that has
+      # to be compiled once per architecture. Check the VPS with `uname -m`
+      # before assuming: aarch64 needs arm64 added here, or the pulled image
+      # will fail to start with an exec format error.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Persists the Go build cache between runs, so a typical push
+          # recompiles only the packages that changed rather than all of
+          # modernc.org/sqlite.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

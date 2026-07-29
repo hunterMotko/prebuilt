@@ -6,6 +6,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}}</title>
     <meta name="description" content="Prebuilt Sheds LLC — Quality gambrel, gable, and skillion sheds built to last.">
+
+    {{/* Absolute URLs only — scrapers ignore relative og:image and og:url.
+         The whole block is gated on SITE_URL because a canonical pointing at
+         an empty origin is worse than no canonical at all. */}}
+    {{if siteURL}}
+    <link rel="canonical" href="{{siteURL}}/">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{siteURL}}/">
+    <meta property="og:site_name" content="Prebuilt Sheds LLC">
+    <meta property="og:title" content="{{.Title}}">
+    <meta property="og:description" content="Quality gambrel, gable, and skillion sheds built to last. Delivered and set, ready to use.">
+    {{/* REPLACE: a purpose-made 1200x630 image crops better than this one.
+         Facebook and LinkedIn letterbox anything far from that ratio. */}}
+    <meta property="og:image" content="{{siteURL}}/public/images/hero-image.jpg">
+    <meta property="og:image:alt" content="A finished shed built by Prebuilt Sheds LLC">
+    {{/* summary_large_image is what turns a shared link into a full-width
+         photo card rather than a thumbnail — for a business selling on how
+         its work looks, that is the entire point of these tags. */}}
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{.Title}}">
+    <meta name="twitter:description" content="Quality gambrel, gable, and skillion sheds built to last. Delivered and set, ready to use.">
+    <meta name="twitter:image" content="{{siteURL}}/public/images/hero-image.jpg">
+    {{end}}
+
+    {{template "structured_data.html" .}}
+
     <link rel="icon" type="image/png" href="/public/images/pbs-logo.png">
     <link rel="stylesheet" href="/public/css/style.css">
     <script src="/public/js/htmx.min.js" defer></script>

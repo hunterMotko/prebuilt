@@ -1,0 +1,87 @@
+{{define "structured_data.html"}}
+{{/*
+    LocalBusiness structured data — what Google reads to connect this site to
+    the Google Business Profile, and what feeds the knowledge panel and map
+    results.
+
+    ─────────────────────────────────────────────────────────────────────────
+    THIS BLOCK IS INCOMPLETE ON PURPOSE. Read before editing.
+    ─────────────────────────────────────────────────────────────────────────
+
+    Only fields verifiable from this codebase are populated. Address, service
+    area, and the Business Profile link are OMITTED rather than guessed,
+    because for local SEO wrong data is materially worse than missing data:
+    Google cross-checks name/address/phone ("NAP") against the Business
+    Profile and other directories, and a mismatch suppresses ranking rather
+    than merely failing to help it. An address that disagrees with the profile
+    is an active penalty.
+
+    TO COMPLETE — copy each value EXACTLY as it appears in the Google Business
+    Profile, character for character, including abbreviations ("St" vs
+    "Street") and suite formatting:
+
+      1. Uncomment the "address" block and fill it in.
+      2. Uncomment "areaServed" and list the towns actually served.
+      3. Uncomment "sameAs" and paste the Business Profile URL. THIS is the
+         link between site and profile — find it in the Business Profile
+         dashboard under "Share your Business Profile", or open the business
+         in Google Maps and copy the URL. Add Facebook/Instagram to the same
+         array if they exist.
+      4. Validate at https://search.google.com/test/rich-results before
+         trusting any of it.
+
+    Rendered only when SITE_URL is set, because @id and url must be absolute.
+
+    Note on CSP: application/ld+json is a data block, not executable script,
+    so `script-src 'self'` does not block it. It needs no nonce and no policy
+    change.
+*/}}
+{{if siteURL}}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "GeneralContractor",
+  "@id": "{{siteURL}}/#business",
+  "name": "Prebuilt Sheds LLC",
+  "url": "{{siteURL}}/",
+  "logo": "{{siteURL}}/public/images/pbs-logo.png",
+  "image": "{{siteURL}}/public/images/hero-image.jpg",
+  "description": "Builder of gambrel, gable, and skillion storage sheds, delivered and set on site.",
+  "telephone": "+1-989-387-9233",
+  "priceRange": "$$",
+  "openingHoursSpecification": [
+    {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday"
+      ],
+      "opens": "08:00",
+      "closes": "18:00"
+    }
+  ]
+
+  {{/* ---- UNCOMMENT AND COMPLETE: must match the Business Profile exactly ----
+  ,"address": {
+    "@type": "PostalAddress",
+    "streetAddress": "REPLACE",
+    "addressLocality": "REPLACE",
+    "addressRegion": "MI",
+    "postalCode": "REPLACE",
+    "addressCountry": "US"
+  }
+  ,"areaServed": [
+    { "@type": "City", "name": "REPLACE" }
+  ]
+  ,"sameAs": [
+    "REPLACE — Google Business Profile URL"
+  ]
+  ---- END ---- */}}
+}
+</script>
+{{end}}
+{{end}}
