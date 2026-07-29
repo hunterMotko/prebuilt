@@ -218,8 +218,12 @@ func newServer(cfg Config) (*echo.Echo, error) {
 	e.HTTPErrorHandler = handlers.HTTPErrorHandler
 
 	e.Static("/public", "public")
-	e.File("/robots.txt", "public/robots.txt")
-	e.File("/sitemap.xml", "public/sitemap.xml")
+
+	// Generated, not served from disk: the sitemap has to track FEATURE_INSTOCK
+	// and the deployed origin, neither of which a static file can. See
+	// handlers/seo.go.
+	e.GET("/robots.txt", handlers.Robots(cfg.SiteURL))
+	e.GET("/sitemap.xml", handlers.Sitemap(cfg.SiteURL, featureInstock))
 
 	// A global BodyLimit would also constrain /admin's own (larger, for photo
 	// uploads) limit below — BodyLimit wraps the body reader, so an outer

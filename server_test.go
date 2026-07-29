@@ -2,11 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -229,6 +231,87 @@ func TestInstockFeatureFlag(t *testing.T) {
 	cfg.FeatureInstock = true
 	if rec := get(t, newTestServer(t, cfg), "/instock"); rec.Code != http.StatusOK {
 		t.Errorf("flag on: GET /instock = %d, want 200", rec.Code)
+	}
+}
+
+// The sitemap and the router must agree about /instock. Before this was
+// generated, public/sitemap.xml carried the /instock entry commented out with a
+// note to uncomment it when the flag went on — a manual step with no failure
+// mode other than someone noticing. Flipping the flag now has to move both.
+func TestSitemapTracksFeatureFlag(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		enabled bool
+	}{{"flag off", false}, {"flag on", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := testConfig()
+			cfg.FeatureInstock = tc.enabled
+			e := newTestServer(t, cfg)
+
+			body := get(t, e, "/sitemap.xml").Body.String()
+
+			// Parsed, not substring-matched: a sitemap search engines reject is
+			// indistinguishable from one they never fetched, so "contains the
+			// right text" is not the property worth asserting.
+			var set struct {
+				URLs []struct {
+					Loc string `xml:"loc"`
+				} `xml:"url"`
+			}
+			if err := xml.Unmarshal([]byte(body), &set); err != nil {
+				t.Fatalf("sitemap is not valid XML: %v\n%s", err, body)
+			}
+
+			var locs []string
+			for _, u := range set.URLs {
+				locs = append(locs, u.Loc)
+			}
+
+			listed := slices.ContainsFunc(locs, func(l string) bool {
+				return strings.HasSuffix(l, "/instock")
+			})
+			if listed != tc.enabled {
+				t.Errorf("/instock listed = %v, want %v (locs: %v)", listed, tc.enabled, locs)
+			}
+
+			// The homepage is listed either way, and every <loc> must be
+			// absolute — the sitemap format has no relative form.
+			if len(locs) == 0 {
+				t.Fatal("sitemap has no <url> entries")
+			}
+			for _, l := range locs {
+				if !strings.HasPrefix(l, "http://") && !strings.HasPrefix(l, "https://") {
+					t.Errorf("<loc> %q is not absolute", l)
+				}
+			}
+		})
+	}
+}
+
+// SITE_URL is unset in dev and CI, so both documents fall back to the request's
+// host. Production sets it, and it must win — otherwise a request arriving with
+// any other Host would advertise that origin to a crawler.
+func TestSEODocsPreferSiteURL(t *testing.T) {
+	cfg := testConfig()
+	cfg.SiteURL = "https://prebuiltshedsllc.com"
+	e := newTestServer(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil)
+	req.Host = "attacker.example"
+	if body := do(t, e, req).Body.String(); strings.Contains(body, "attacker.example") {
+		t.Errorf("sitemap used the Host header over SITE_URL:\n%s", body)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/robots.txt", nil)
+	req.Host = "attacker.example"
+	body := do(t, e, req).Body.String()
+	if !strings.Contains(body, "Sitemap: https://prebuiltshedsllc.com/sitemap.xml") {
+		t.Errorf("robots.txt did not advertise the SITE_URL sitemap:\n%s", body)
+	}
+	// A trailing slash on Disallow would leave /admin itself crawlable, since
+	// robots.txt matching is a plain prefix match.
+	if !strings.Contains(body, "Disallow: /admin\n") {
+		t.Errorf("robots.txt does not disallow /admin:\n%s", body)
 	}
 }
 

@@ -401,8 +401,8 @@ urgency dropped considerably.
 | SEO-2 | No `LocalBusiness` structured data | S2 | M | **Done** |
 | SEO-3 | No canonical link tags | S3 | S | **Done** |
 | SEO-4 | No Google Business Profile linkage | S2 | S | Needs your data |
-| SEO-5 | Sitemap is static and hand-maintained | S3 | S |
-| SEO-6 | No analytics | S3 | S |
+| SEO-5 | Sitemap is static and hand-maintained | S3 | S | **Done** |
+| SEO-6 | No analytics | S3 | S | Needs a decision |
 
 **SEO-1.** *Verified: none present.* Every share of this link on Facebook —
 where a shed builder's customers actually are — renders as a bare grey box. One
@@ -462,6 +462,42 @@ thing to remove once the real values are in.
 
 Note: `application/ld+json` is a data block, not executable script, so
 `script-src 'self'` does not block it — no nonce or policy change needed.
+
+---
+
+**SEO-5 — Sitemap generated, not stored.** *Done.* `public/sitemap.xml` and
+`public/robots.txt` are deleted; both are now built per-request in
+`handlers/seo.go` and wired in `server.go`.
+
+The `/instock` entry is emitted from the same `featureInstock` value that
+decides whether the route is registered at all, passed into the handler rather
+than re-read, so the two cannot disagree. Previously the entry sat commented out
+in the XML with a note to uncomment it when the flag went on — a manual step
+whose only failure mode was nobody remembering. Both directions are wrong and
+both were reachable: a sitemap advertising a URL that 404s is a Search Console
+error, and one omitting a live page is a page Google may never crawl.
+
+Two things fixed in passing. Both files hardcoded
+`https://prebuiltshedsllc.com`, so any non-production deploy would have handed
+Google the production domain; they now use `SITE_URL`, falling back to the
+request's host so dev and CI need no configuration. And serving them out of
+`public/` left them reachable twice — `/sitemap.xml` and `/public/sitemap.xml`
+— which is a free duplicate-content signal. `/public/sitemap.xml` now 404s.
+
+The host fallback is safe here in a way it would *not* be for the canonical and
+`og:url` tags, which stay gated on `SITE_URL`. The difference is who reads the
+output. A forged `Host` on a canonical tag misdirects other people's traffic,
+because the tag is embedded in a page real visitors fetch. A sitemap is fetched
+directly by the crawler, which sends the true `Host`, so forging it only returns
+a bogus document to whoever forged it.
+
+`Disallow` also changed from `/admin/` to `/admin`. robots.txt matching is a
+plain prefix match, so the trailing slash left `/admin` itself — the auth prompt
+— crawlable.
+
+No `<lastmod>`: the honest value would need content change times this server
+does not track, and a `lastmod` that is always "now" teaches crawlers to ignore
+the field entirely.
 
 ---
 
