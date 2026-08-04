@@ -611,13 +611,28 @@ func TestStructuredDataIsValidJSON(t *testing.T) {
 		t.Errorf("url = %v", data["url"])
 	}
 
-	// Address, areaServed and sameAs must stay absent until they can be copied
-	// verbatim from the Google Business Profile. A NAP mismatch actively
-	// suppresses local ranking, so a guessed address is worse than none.
-	for _, k := range []string{"address", "areaServed", "sameAs"} {
-		if _, present := data[k]; present {
-			t.Errorf("%q is populated — verify it matches the Business Profile exactly, then remove this assertion", k)
+	// The address is the field a NAP mismatch punishes, so it is asserted
+	// whole: a block missing postalCode or addressRegion is worse than useless,
+	// because Google will still try to place the business from what is there.
+	addr, ok := data["address"].(map[string]any)
+	if !ok {
+		t.Fatalf("address missing or not an object: %v", data["address"])
+	}
+	for _, k := range []string{"streetAddress", "addressLocality", "addressRegion", "postalCode", "addressCountry"} {
+		if s, _ := addr[k].(string); s == "" {
+			t.Errorf("address.%s is empty", k)
 		}
+	}
+
+	if _, ok := data["areaServed"].([]any); !ok {
+		t.Errorf("areaServed missing or not an array: %v", data["areaServed"])
+	}
+
+	// The whole block is copied-and-filled by hand, so the placeholder token is
+	// the likely failure mode — a half-completed edit that still parses as JSON
+	// and publishes "REPLACE" as the street address.
+	if strings.Contains(m[1], "REPLACE") {
+		t.Error("JSON-LD still contains a REPLACE placeholder")
 	}
 }
 

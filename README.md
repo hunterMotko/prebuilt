@@ -29,7 +29,6 @@ handlers/        one file per route group; HTTP concerns only
 database/        schema, migrations, queries; no HTTP awareness
 templates/       layout + partials; admin has its own template set
 public/          static assets, uploaded photos
-deploy/          nginx server block
 ```
 
 Requests are server-rendered end to end. htmx handles the two interactions that
@@ -150,10 +149,24 @@ Set via environment or `.env`. Unset flags default to off.
 
 ## Deployment
 
+CI builds and publishes the image to GHCR behind a `needs:` gate, so an image
+that failed tests cannot reach the registry. The server pulls that image rather
+than compiling:
+
 ```bash
-cp .env.example .env
-docker compose up -d --build
+docker compose pull
+docker compose up -d --no-build
 ```
+
+`--no-build` is not optional there. `docker-compose.yml` sets both `build:` and
+`image:`, so a plain `up -d` with no cached image silently starts compiling
+instead — and `modernc.org/sqlite` is a single 8.6 MB generated source file that
+takes minutes on one vCPU. Building locally is the other direction:
+`docker compose up -d --build`.
+
+Every image is also tagged `sha-<short>`, so a rollback is
+`IMAGE_TAG=sha-1a2b3c4 docker compose up -d`. `latest` is a moving tag and
+cannot be rolled back to.
 
 nginx and certbot run on the host and terminate TLS. The app runs in Docker and
 binds to loopback only — Docker writes its own iptables rules that bypass the
@@ -168,19 +181,27 @@ the disk and stall SQLite writes.
 
 Two settings are mandatory behind the proxy and are set in compose:
 `TRUST_PROXY`, so per-IP rate limiting sees the real client rather than nginx,
-and `COOKIE_SECURE`. The server block is in `deploy/nginx.conf.example` — note
-its `client_max_body_size`, which must be at least the app's upload limit or
-nginx rejects photo uploads with a 413 before the request ever reaches a
-handler.
+and `COOKIE_SECURE`. The proxy also needs `client_max_body_size` raised to at
+least the app's upload limit — nginx defaults to 1 MB and otherwise rejects
+photo uploads with a bare 413 before the request reaches a handler.
 
-Provisioning, DNS, and certificate issuance are covered in an operational
-runbook maintained outside this repository.
+Provisioning, DNS, certificate issuance, the nginx server block, and backup
+policy live in operational runbooks maintained outside this repository, since
+they describe one specific server rather than the software.
 
 ---
 
 ## Status
 
 The marketing site and contact flow are production-ready. The inventory page is
-built and feature-flagged off pending real inventory data. Session-based admin
-auth is specified but not yet implemented — the admin panel currently uses HTTP
-Basic Auth, which has no logout. Backups are not yet automated.
+built and feature-flagged off pending real inventory data.
+
+The admin panel uses HTTP Basic Auth. Session auth was specified and then
+deliberately not built: over HTTPS, with a long password, per-IP rate limiting,
+CSRF, and fail2ban, the only thing it adds here is a logout button for a
+single-operator panel. Revisit if a second person ever needs access.
+
+Nightly backups are scripted — a consistent `sqlite3 .backup`, an incremental
+photo mirror, and pruning. The off-box copy is not yet enabled, so every backup
+currently sits on the same disk as the data it protects. That is the largest
+remaining operational gap.

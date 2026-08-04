@@ -17,6 +17,13 @@ import (
 	"github.com/hunterMotko/prebuilt/database"
 )
 
+// Contact handles POST /contact, the public lead form. It returns the
+// contact_success.html fragment for htmx to swap in, or an error fragment.
+//
+// The submission is saved before it is mailed, and the send happens in a
+// goroutine, so a broken or unconfigured SMTP server costs the delivery but
+// never the lead. A bot submission is answered with the ordinary success page so
+// it cannot learn it was filtered.
 func Contact(c echo.Context) error {
 	// Checked before validation so a bot gets no feedback at all — not even
 	// "you missed a required field". The response is the ordinary success page

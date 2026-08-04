@@ -37,6 +37,9 @@ func describeDelivery(status string) (label, class string, warning bool) {
 	}
 }
 
+// AdminSubmissions renders recent contact-form leads with their delivery status,
+// so a submission whose email failed is visible rather than silently lost. This
+// is what makes the fire-and-forget send safe.
 func AdminSubmissions(c echo.Context) error {
 	subs, err := database.ListContactSubmissions(submissionListLimit)
 	if err != nil {

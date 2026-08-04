@@ -1,3 +1,12 @@
+// Command prebuilt serves the Prebuilt Sheds LLC marketing site, its public
+// inventory page, and the admin panel that manages both.
+//
+// The program is split three ways, and the split is load-bearing: main.go owns
+// process lifecycle, server.go builds a fully wired Echo instance without
+// starting anything, and config.go resolves every environment-driven setting
+// once. Tests construct the real server through newServer, so middleware
+// ordering, a group's auto-registered RouteNotFound, and nested body limits are
+// exercised rather than reconstructed.
 package main
 
 import (

@@ -23,6 +23,7 @@ func csrfToken(c echo.Context) string {
 	return token
 }
 
+// AdminList renders the inventory table, the admin panel's landing page.
 func AdminList(c echo.Context) error {
 	items, err := database.ListInventoryItems()
 	if err != nil {
@@ -37,6 +38,8 @@ func AdminList(c echo.Context) error {
 	})
 }
 
+// AdminNewItemForm renders the create form, pre-loading the color reference
+// tables so siding and roof codes can be picked from a swatch rather than typed.
 func AdminNewItemForm(c echo.Context) error {
 	siding, err := database.ListSidingColors()
 	if err != nil {
@@ -117,6 +120,11 @@ func parseInventoryForm(c echo.Context) (database.InventoryItem, error) {
 	}, nil
 }
 
+// AdminCreateItem handles the multipart create form and redirects to /admin.
+//
+// Every photo is validated before the item row is inserted, so a rejected upload
+// cannot leave an item with no pictures behind. New stock is always in_stock;
+// status is not a field on this form.
 func AdminCreateItem(c echo.Context) error {
 	item, err := parseInventoryForm(c)
 	if err != nil {
@@ -145,6 +153,8 @@ func AdminCreateItem(c echo.Context) error {
 	return c.Redirect(http.StatusSeeOther, "/admin")
 }
 
+// AdminEditItemForm renders the edit form, which adds a thumbnail grid of the
+// item's existing photos to what the create form shows.
 func AdminEditItemForm(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -180,6 +190,9 @@ func AdminEditItemForm(c echo.Context) error {
 	})
 }
 
+// AdminUpdateItem applies the edit form and redirects to /admin. Newly uploaded
+// photos are validated against the item's existing count before anything is
+// written, so an edit that would exceed the per-item cap changes nothing.
 func AdminUpdateItem(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -217,6 +230,9 @@ func AdminUpdateItem(c echo.Context) error {
 	return c.Redirect(http.StatusSeeOther, "/admin")
 }
 
+// AdminUpdateStatus flips one item between in_stock, on_hold, and sold, and
+// returns the re-rendered admin_item_row.html fragment for htmx to swap in
+// place. Any other status value is rejected with 422.
 func AdminUpdateStatus(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -247,6 +263,9 @@ func AdminUpdateStatus(c echo.Context) error {
 	return c.Render(http.StatusOK, "admin_item_row.html", toCard(item))
 }
 
+// AdminDeleteItem removes an item, its photo rows, and its photo directory, then
+// redirects to /admin. Deletion is permanent and has no undo in the panel; the
+// nightly photo mirror is what makes a mis-click recoverable.
 func AdminDeleteItem(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
