@@ -13,6 +13,7 @@ subject rather than starting a parallel record.
 | `CLAUDE.md` | This file — orientation for working in the codebase | yes |
 | `shed-options.md` | Supplier price list, the source for `pricing.html` | yes |
 | Go doc comments | Package and identifier behaviour, in godoc style | yes |
+| `docs/ADMIN.md` | The management panel: routing, uploads, photo schema | no |
 | `docs/BACKLOG.md` | **All** open work, and what was cut and why | no |
 | `docs/LOGGING_AND_BACKUPS.md` | What is recorded and retained, and the restore procedure | no |
 | `deploy/DEPLOY.md` | Provisioning the VPS from scratch | no |
@@ -89,31 +90,37 @@ exact string `true` counts as on.
 | `SMTP_USER`       | SMTP login / From address                                      |
 | `SMTP_PASS`       | SMTP password or app password                                  |
 | `CONTACT_EMAIL`   | Where form submissions are emailed                             |
-| `ADMIN_USER`      | `/admin` HTTP Basic Auth username                              |
-| `ADMIN_PASS`      | `/admin` HTTP Basic Auth password                              |
+| `ADMIN_USER`      | Basic Auth username for the protected routes                   |
+| `ADMIN_PASS`      | Basic Auth password for the protected routes                   |
+| `ADMIN_PATH`      | Prefix the protected routes mount at (default `/admin`)        |
 | `TRUST_PROXY`     | Read the client IP from `X-Forwarded-For`. Required behind nginx |
-| `COOKIE_SECURE`   | Mark the admin CSRF cookie `Secure`. Requires HTTPS            |
+| `COOKIE_SECURE`   | Mark the CSRF cookie `Secure`. Requires HTTPS                  |
 | `FEATURE_INSTOCK` | Registers the `/instock` route. Off means the page 404s        |
 | `SITE_URL`        | Public origin. Gates canonical, Open Graph, and JSON-LD tags   |
 | `CSP_REPORT_ONLY` | Report CSP violations instead of blocking                      |
 
 Email is fire-and-forget in a goroutine. If `SMTP_HOST` or `CONTACT_EMAIL` is blank, the email step is silently skipped — submissions still save to SQLite.
 
-If `ADMIN_USER` or `ADMIN_PASS` is blank, `/admin` fails closed (rejects all requests) rather than failing open.
+If `ADMIN_USER` or `ADMIN_PASS` is blank, the protected routes fail closed (reject all requests) rather than failing open.
 
 `TRUST_PROXY` and `COOKIE_SECURE` are set in `docker-compose.yml`, not `.env` — both are properties of running behind nginx rather than of a particular deployment.
 
 Feature flags gate **routes**, not just nav links, so a disabled feature 404s rather than sitting unlinked but reachable.
 
-## Admin panel
+## Management panel
 
-`/admin` manages inventory (in stock/on hold/sold) from `inventory_items`, protected by HTTP Basic Auth (`handlers/admin_*.go`, `templates/admin/`). The group also carries a rate limiter, a 40 MB body limit, and CSRF — ordered deliberately in `server.go`, so add admin routes to that group rather than registering them standalone. Status changes use htmx (`hx-post` + row swap). Creating and editing items are plain form POSTs (multipart, since both include photo uploads); edit additionally shows a thumbnail grid of existing photos with per-photo htmx delete. Deleting an item removes its DB rows (cascaded, see below) and its entire photo directory. Editing the `siding_colors`/`roof_colors` reference tables has no UI yet — edit them directly via `sqlite3 prebuilt.db`.
+Mounted at `ADMIN_PATH` (default `/admin`), protected by HTTP Basic Auth. The
+route group also carries a rate limiter, a 40 MB body limit, and CSRF, ordered
+deliberately in `server.go` — add routes to that group rather than registering
+them standalone.
 
-**Photo uploads** (`handlers/uploads.go`): each item can have multiple photos tagged `exterior`/`interior`/`feature` (admin-facing only, never shown to customers) via three separate file inputs on the create/edit forms. Files are validated *before* anything is committed — real content-type sniffing (not just the extension), an 8MB-per-file cap, and a 12-photos-per-item cap — so a bad upload never leaves an orphaned item or a half-applied edit. Saved files get a random server-generated name (the client's original filename is never trusted) under `public/images/inventory/{item_id}/`.
+The prefix is configurable so the deployed path stays out of this public
+repository. Never hardcode it: templates use the `adminPath` template func and
+handlers read `handlers.SetAdminPath`. `robots.txt` deliberately emits no
+`Disallow` line, because naming the prefix there would publish it.
 
-Schema: `inventory_images` (id, `inventory_item_id` FK, filename, category, created_at) references `inventory_items.id` with `ON DELETE CASCADE`. SQLite's foreign-key enforcement is per-connection, so `database/db.go` pins the pool to a single connection (`SetMaxOpenConns(1)`) and sets `PRAGMA foreign_keys = ON` at startup — without both, the cascade wouldn't reliably apply. Deleting the DB rows this way only handles the database side; handlers still `os.RemoveAll` the item's photo directory separately since SQLite cascades don't touch the filesystem.
-
-`inventory_items` originally had a single `image_filename` column; `database/inventory.go`'s `migrateLegacyImageFilename()` is a one-time, idempotent migration (guarded by checking whether the column still exists) that copies any legacy value into `inventory_images` and drops the column. It only matters for databases created before the photo-gallery feature existed.
+Full detail — routing, uploads, photo schema, and the reference tables — is in
+`docs/ADMIN.md`, which is local-only.
 
 ## In-stock page
 

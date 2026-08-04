@@ -135,6 +135,11 @@ func newServer(cfg Config) (*echo.Echo, error) {
 	// Set FEATURE_INSTOCK=true in .env to work on /instock locally.
 	featureInstock := cfg.FeatureInstock
 
+	// Re-normalised rather than trusted: loadConfig() already did this, but a
+	// zero-value Config built in a test would leave it empty, and e.Group("")
+	// mounts the whole admin panel at the site root behind the homepage.
+	adminPrefix := adminPath(cfg.AdminPath)
+
 	// Template funcs rather than per-handler data maps: nav.html and footer.html
 	// are included by every page, so the data-map route means touching every
 	// handler and remembering to do it again for each new one. Funcs must be
@@ -148,6 +153,9 @@ func newServer(cfg Config) (*echo.Echo, error) {
 		// unset and the templates omit the whole block — a canonical pointing
 		// nowhere actively tells search engines the real page is elsewhere.
 		"siteURL": func() string { return cfg.SiteURL },
+		// Prefix for every link and htmx target in templates/admin/. Hardcoding
+		// "/admin" there would pin the panel to one path and defeat ADMIN_PATH.
+		"adminPath": func() string { return adminPrefix },
 	}
 
 	// Not template.Must: a glob matching nothing is what a bad Dockerfile COPY
@@ -233,7 +241,7 @@ func newServer(cfg Config) (*echo.Echo, error) {
 		// Without an explicit path the cookie defaults to the directory of
 		// whichever admin sub-path set it first, so a token from one page fails
 		// on another.
-		CookiePath: "/admin",
+		CookiePath: adminPrefix,
 	})
 
 	// Basic Auth has no attempt limit of its own. Ordered BEFORE adminAuth in the
@@ -250,7 +258,11 @@ func newServer(cfg Config) (*echo.Echo, error) {
 		}),
 	})
 
-	admin := e.Group("/admin", adminRateLimit, adminAuth, middleware.BodyLimit("40M"), adminCSRF)
+	// Mounted at cfg.AdminPath rather than a literal so the deployed path can
+	// differ from the default this repository shows. The handlers need it too,
+	// for their post-action redirects.
+	handlers.SetAdminPath(adminPrefix)
+	admin := e.Group(adminPrefix, adminRateLimit, adminAuth, middleware.BodyLimit("40M"), adminCSRF)
 	admin.GET("", handlers.AdminList)
 	admin.GET("/submissions", handlers.AdminSubmissions)
 	admin.GET("/inventory/new", handlers.AdminNewItemForm)

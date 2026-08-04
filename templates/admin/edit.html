@@ -16,7 +16,7 @@
 <div class="container admin-shell">
     <div class="admin-header">
         <h1 class="section-title">Edit <span class="red-text">Inventory Item</span></h1>
-        <a href="/admin" class="btn btn-outline btn-sm">&larr; Back to list</a>
+        <a href="{{adminPath}}" class="btn btn-outline btn-sm">&larr; Back to list</a>
     </div>
 
     <div class="admin-photos">
@@ -30,7 +30,7 @@
         {{end}}
     </div>
 
-    <form method="POST" action="/admin/inventory/{{.Item.ID}}" class="admin-form" enctype="multipart/form-data">
+    <form method="POST" action="{{adminPath}}/inventory/{{.Item.ID}}" class="admin-form" enctype="multipart/form-data">
         <input type="hidden" name="csrf" value="{{.CSRFToken}}">
         <div class="form-row">
             <div class="form-group">

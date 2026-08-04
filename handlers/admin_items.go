@@ -15,8 +15,18 @@ import (
 	"github.com/hunterMotko/prebuilt/database"
 )
 
+// adminPath is the URL prefix the admin group is mounted at. Handlers are plain
+// functions with no access to Config, so post-action redirects read it from
+// here. The default matches config.go's.
+var adminPath = "/admin"
+
+// SetAdminPath tells the admin handlers where their group is mounted, so
+// redirects land on the configured path rather than the default. Call it once
+// during wiring, before the server starts serving.
+func SetAdminPath(p string) { adminPath = p }
+
 // csrfToken reads the token the CSRF middleware generated for this request
-// (see main.go's adminCSRF config) so it can be embedded in a page — as a
+// (see server.go's adminCSRF config) so it can be embedded in a page — as a
 // hidden form field for plain POSTs, or a <meta> tag for htmx requests.
 func csrfToken(c echo.Context) string {
 	token, _ := c.Get("csrf").(string)
@@ -120,7 +130,7 @@ func parseInventoryForm(c echo.Context) (database.InventoryItem, error) {
 	}, nil
 }
 
-// AdminCreateItem handles the multipart create form and redirects to /admin.
+// AdminCreateItem handles the multipart create form and redirects to the admin list.
 //
 // Every photo is validated before the item row is inserted, so a rejected upload
 // cannot leave an item with no pictures behind. New stock is always in_stock;
@@ -150,7 +160,7 @@ func AdminCreateItem(c echo.Context) error {
 		c.Logger().Error("save inventory photos failed:", err)
 	}
 
-	return c.Redirect(http.StatusSeeOther, "/admin")
+	return c.Redirect(http.StatusSeeOther, adminPath)
 }
 
 // AdminEditItemForm renders the edit form, which adds a thumbnail grid of the
@@ -190,7 +200,7 @@ func AdminEditItemForm(c echo.Context) error {
 	})
 }
 
-// AdminUpdateItem applies the edit form and redirects to /admin. Newly uploaded
+// AdminUpdateItem applies the edit form and redirects to the admin list. Newly uploaded
 // photos are validated against the item's existing count before anything is
 // written, so an edit that would exceed the per-item cap changes nothing.
 func AdminUpdateItem(c echo.Context) error {
@@ -227,7 +237,7 @@ func AdminUpdateItem(c echo.Context) error {
 		c.Logger().Error("save inventory photos failed:", err)
 	}
 
-	return c.Redirect(http.StatusSeeOther, "/admin")
+	return c.Redirect(http.StatusSeeOther, adminPath)
 }
 
 // AdminUpdateStatus flips one item between in_stock, on_hold, and sold, and
@@ -264,7 +274,7 @@ func AdminUpdateStatus(c echo.Context) error {
 }
 
 // AdminDeleteItem removes an item, its photo rows, and its photo directory, then
-// redirects to /admin. Deletion is permanent and has no undo in the panel; the
+// redirects to the admin list. Deletion is permanent and has no undo in the panel; the
 // nightly photo mirror is what makes a mis-click recoverable.
 func AdminDeleteItem(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)

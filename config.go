@@ -21,10 +21,19 @@ type Config struct {
 	// emitting ones that point nowhere, which is worse than none.
 	SiteURL string
 
-	// Compared in constant time by the Basic Auth validator. Empty means /admin
-	// fails closed rather than open.
+	// Compared in constant time by the Basic Auth validator. Empty means the
+	// admin group fails closed rather than open.
 	AdminUser string
 	AdminPass string
+
+	// URL prefix the admin group mounts at, leading slash and no trailing one.
+	//
+	// Configurable so the real path stays out of this public repository: the
+	// default is the obvious guess, and production sets something else in .env.
+	// This is noise reduction, not a security control — it keeps blind scanners
+	// out of the logs, and the auth, rate limit, and CSRF are what actually stop
+	// an attacker who finds the path.
+	AdminPath string
 
 	// Installs the X-Forwarded-For IP extractor. Required behind nginx, and
 	// dangerous without it: a directly-exposed server would let a client spoof
@@ -68,11 +77,26 @@ func loadConfig() Config {
 		SiteURL:        strings.TrimRight(os.Getenv("SITE_URL"), "/"),
 		AdminUser:      os.Getenv("ADMIN_USER"),
 		AdminPass:      os.Getenv("ADMIN_PASS"),
+		AdminPath:      adminPath(os.Getenv("ADMIN_PATH")),
 		TrustProxy:     envBool("TRUST_PROXY"),
 		CookieSecure:   envBool("COOKIE_SECURE"),
 		CSPReportOnly:  envBool("CSP_REPORT_ONLY"),
 		FeatureInstock: envBool("FEATURE_INSTOCK"),
 	}
+}
+
+// adminPath normalises ADMIN_PATH to a leading slash with no trailing one, so
+// "marty", "/marty" and "/marty/" all mount the same group and the templates can
+// concatenate without producing "//".
+//
+// An empty or slash-only value falls back to the default rather than mounting
+// the admin panel at the site root, which would shadow the homepage.
+func adminPath(raw string) string {
+	p := "/" + strings.Trim(strings.TrimSpace(raw), "/")
+	if p == "/" {
+		return "/admin"
+	}
+	return p
 }
 
 // envBool treats only the exact string "true" as on. Strict on purpose: every

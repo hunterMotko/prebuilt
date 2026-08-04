@@ -28,15 +28,16 @@ func origin(c echo.Context, siteURL string) string {
 // Robots serves /robots.txt, generated rather than kept as a static file so the
 // Sitemap line always carries the origin the request actually arrived on.
 //
-// Disallow is "/admin", not "/admin/". robots.txt matching is a plain prefix
-// match, so the trailing slash would have left /admin itself crawlable — the
-// login prompt, which is the one URL worth keeping out of an index.
+// It deliberately Disallows nothing. A Disallow line naming the admin prefix
+// would publish that prefix to the first file every scanner fetches, which is
+// exactly backwards: robots.txt is a crawling hint, never an access control.
+// Nothing links to the admin panel, so no crawler finds it to index anyway.
 func Robots(siteURL string) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		var b strings.Builder
 		b.WriteString("User-agent: *\n")
 		b.WriteString("Allow: /\n")
-		b.WriteString("Disallow: /admin\n\n")
+		b.WriteString("\n")
 		fmt.Fprintf(&b, "Sitemap: %s/sitemap.xml\n", origin(c, siteURL))
 		return c.String(http.StatusOK, b.String())
 	}
