@@ -9,33 +9,15 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// robots.txt and sitemap.xml used to be static files under public/. Two
-// problems with that, both of which this file exists to fix:
+// origin resolves the absolute base URL robots.txt and sitemap.xml must
+// contain; neither format has a relative form.
 //
-//  1. The sitemap's /instock entry had to be commented out by hand while
-//     FEATURE_INSTOCK was off, and uncommented by hand when it goes on. A
-//     sitemap advertising a URL that 404s is a Search Console error, and one
-//     that omits a live page is a page Google may never crawl. Coupling the
-//     sitemap to the same flag that registers the route removes the
-//     opportunity to forget.
-//
-//  2. Both files hardcoded https://prebuiltshedsllc.com, so a staging deploy
-//     would hand Google the production domain.
-//
-// Serving them from public/ also left them reachable twice — /sitemap.xml and
-// /public/sitemap.xml — which is a duplicate-content signal for free.
-
-// origin resolves the absolute base URL these documents must contain. Both
-// formats require absolute URLs; there is no relative form.
-//
-// SITE_URL wins when set. The fallback to the request's own host is what keeps
-// dev and CI working without configuration, and is safe in a way that the
-// canonical/og:url tags are NOT — which is why those are gated on SITE_URL
-// instead of using this. The difference is who reads the output: a poisoned
-// canonical tag is embedded in a page that real visitors and crawlers fetch, so
-// a forged Host header there misdirects other people's traffic. A sitemap is
-// fetched directly by the crawler, which sends the real Host, so a forged one
-// only ever returns a bogus document to the person who forged it.
+// SITE_URL wins when set; the Host fallback keeps dev and CI working with no
+// configuration. Safe here in a way it would NOT be for canonical/og:url, which
+// stay gated on SITE_URL — a forged Host on a canonical tag misdirects other
+// people's traffic, because the tag is embedded in a page real visitors fetch. A
+// sitemap is fetched by the crawler, which sends the true Host, so forging it
+// only returns a bogus document to whoever forged it.
 func origin(c echo.Context, siteURL string) string {
 	if siteURL != "" {
 		return siteURL
@@ -43,17 +25,19 @@ func origin(c echo.Context, siteURL string) string {
 	return c.Scheme() + "://" + c.Request().Host
 }
 
-// Robots serves /robots.txt.
+// Robots serves /robots.txt, generated rather than kept as a static file so the
+// Sitemap line always carries the origin the request actually arrived on.
 //
-// Disallow is "/admin", not "/admin/". robots.txt matching is a plain prefix
-// match, so the trailing slash would have left /admin itself crawlable — the
-// login prompt, which is the one URL worth keeping out of an index.
+// It deliberately Disallows nothing. A Disallow line naming the admin prefix
+// would publish that prefix to the first file every scanner fetches, which is
+// exactly backwards: robots.txt is a crawling hint, never an access control.
+// Nothing links to the admin panel, so no crawler finds it to index anyway.
 func Robots(siteURL string) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		var b strings.Builder
 		b.WriteString("User-agent: *\n")
 		b.WriteString("Allow: /\n")
-		b.WriteString("Disallow: /admin\n\n")
+		b.WriteString("\n")
 		fmt.Fprintf(&b, "Sitemap: %s/sitemap.xml\n", origin(c, siteURL))
 		return c.String(http.StatusOK, b.String())
 	}
@@ -72,6 +56,13 @@ type sitemapURLSet struct {
 }
 
 // Sitemap serves /sitemap.xml, built from the routes actually registered.
+//
+// Generating it is what fixed three problems the static file had: the /instock
+// entry needed commenting out by hand whenever FEATURE_INSTOCK was off, and a
+// sitemap advertising a 404 is a Search Console error while one omitting a live
+// page may never get crawled; the production domain was hardcoded; and the file
+// was reachable at both /sitemap.xml and /public/sitemap.xml, which is a free
+// duplicate-content signal.
 //
 // featureInstock is the same value newServer() uses to decide whether to
 // register the /instock route, passed in rather than re-read, so the two cannot

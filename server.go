@@ -17,10 +17,13 @@ import (
 	"github.com/hunterMotko/prebuilt/handlers"
 )
 
+// TemplateRenderer adapts a parsed html/template set to echo.Renderer.
 type TemplateRenderer struct {
 	templates *template.Template
 }
 
+// Render executes the named template into w. It satisfies echo.Renderer, whose
+// signature carries an echo.Context this implementation does not need.
 func (t *TemplateRenderer) Render(w io.Writer, name string, data any, c echo.Context) error {
 	return t.templates.ExecuteTemplate(w, name, data)
 }
@@ -28,25 +31,20 @@ func (t *TemplateRenderer) Render(w io.Writer, name string, data any, c echo.Con
 // newServer builds the fully wired Echo instance: middleware, templates,
 // routes, and timeouts. It starts nothing and reads no environment variables.
 //
-// Split out of main() so tests can exercise the REAL wiring. That distinction
-// carries more weight than it sounds: middleware ordering, the catch-all
-// RouteNotFound a middleware-bearing Group auto-registers, admin.GET("") path
-// joining, and the nested public-3M/admin-40M body limits are properties of
-// this function and of nothing else. A test that built its own echo.New() and
-// re-declared the middleware would assert against a copy, and would stay green
-// through precisely the bugs that matter — which is how the static-asset 404
-// reached production.
+// Split out of main() so tests exercise the real wiring. Middleware ordering,
+// the catch-all RouteNotFound a middleware-bearing Group auto-registers,
+// admin.GET("") path joining, and the nested public-3M/admin-40M body limits
+// are properties of this function alone — a test that built its own echo.New()
+// would assert against a copy and stay green through the static-asset 404 that
+// actually reached production.
 func newServer(cfg Config) (*echo.Echo, error) {
 	e := echo.New()
 	e.HideBanner = true
 
-	// Behind a reverse proxy (nginx on the VPS) every request arrives from
-	// the proxy's own address rather than the visitor's. Without
-	// this the per-IP form rate limiter below would see a single client for
-	// the entire internet and start 429-ing real customers collectively, so
-	// this is required — not optional — whenever a proxy is in front.
-	// Off by default so running directly on the internet can't be tricked by
-	// a spoofed X-Forwarded-For header.
+	// Behind nginx every request arrives from the proxy's address, so without
+	// this the per-IP rate limiters below see one client for the whole internet
+	// and 429 real customers collectively. Off by default so a directly-exposed
+	// server can't be fed a spoofed X-Forwarded-For.
 	if cfg.TrustProxy {
 		e.IPExtractor = echo.ExtractIPFromXFFHeader()
 	}
@@ -57,61 +55,35 @@ func newServer(cfg Config) (*echo.Echo, error) {
 	e.Use(middleware.Recover())
 	// Standard security headers (nosniff, X-Frame-Options, XSS protection).
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
-		// "0", not "1; mode=block". The header switched on a legacy browser XSS
-		// auditor that was itself a source of vulnerabilities — it could be
-		// coaxed into leaking information by selectively blocking parts of a
-		// page. Every browser that implemented it has since removed it, so this
-		// changes nothing at runtime; it is set explicitly rather than omitted
-		// because Echo's default is the deprecated value.
+		// "0", not "1; mode=block". The header enabled a legacy browser XSS
+		// auditor that was itself exploitable; every browser has removed it. Set
+		// explicitly only because Echo's default is the deprecated value.
 		XSSProtection:      "0",
 		ContentTypeNosniff: "nosniff",
 		XFrameOptions:      "SAMEORIGIN",
-		// Without this the browser sends the full URL of the current page as
-		// the Referer on outbound links. Harmless from the homepage, not
-		// harmless from /admin/inventory/17/edit — that path would leak to
-		// whatever third party an admin clicked through to. Cross-origin
-		// requests now carry only the origin; same-site keeps the full path.
+		// Stops the full current URL travelling as the Referer on outbound
+		// clicks. Harmless from the homepage; not from /admin/inventory/17/edit.
 		ReferrerPolicy: "strict-origin-when-cross-origin",
-		// Set explicitly because Echo's DefaultSecureConfig leaves HSTSMaxAge
-		// at 0, which silently means the header is never sent at all — using
-		// plain middleware.Secure() looks like HSTS coverage but isn't.
-		// Echo emits it when the request is TLS *or* carries
-		// X-Forwarded-Proto: https, so it stays dormant on plain-HTTP local
-		// dev and switches on behind nginx once that header is forwarded.
-		// Keep nginx from adding its own Strict-Transport-Security or the
-		// response carries two.
+		// Set explicitly because Echo's default HSTSMaxAge of 0 silently means
+		// the header is never sent — plain middleware.Secure() looks like HSTS
+		// coverage but isn't. Echo emits it on TLS or X-Forwarded-Proto: https,
+		// so it stays dormant on local dev. Don't let nginx also send one.
 		HSTSMaxAge: 31536000, // 1 year
-		// Conservative on purpose: includeSubdomains would force every future
-		// subdomain to be HTTPS-only in any browser that has seen this header,
-		// which is a confusing outage to debug if one ever isn't. Flip to
-		// false once you know every subdomain will have a certificate.
+		// includeSubdomains would force every future subdomain to be HTTPS-only
+		// in any browser that has seen this header — a confusing outage if one
+		// ever isn't. Flip once every subdomain is certain to have a cert.
 		HSTSExcludeSubdomains: true,
 
-		// Content-Security-Policy. Every asset this site loads is served from
-		// its own origin — htmx is vendored at /public/js/htmx.min.js, there are
-		// no CDNs, web fonts, or analytics — so 'self' is genuinely sufficient
-		// and no host allowlist is needed.
+		// Every asset is same-origin (htmx is vendored, no CDN/fonts/analytics),
+		// so 'self' needs no host allowlist and no nonce — the two admin inline
+		// blocks moved to public/js/admin.js.
 		//
-		// No nonce. A nonce means generating a random value per request and
-		// threading it into every template; it is the right answer when inline
-		// scripts are unavoidable, and here they weren't. The two admin inline
-		// blocks moved to public/js/admin.js instead, which is why script-src
-		// can be a plain 'self' with no 'unsafe-inline' anywhere.
-		//
-		//   img-src data:      style.css embeds the select-arrow chevron as an
-		//                      inline SVG data URI.
-		//   style-src-attr     the admin and /instock colour swatches render as
-		//                      style="background:{{.Hex}}" from owner-editable
-		//                      DB rows, so those attributes must be allowed.
-		//                      Split out deliberately: style-src itself stays
-		//                      strict, so this permits inline style ATTRIBUTES
-		//                      without permitting an injected <style> block.
-		//                      html/template already applies CSS-context
-		//                      escaping inside a style attribute.
-		//   base-uri/form-action  block <base> injection and form hijacking —
-		//                      the two things an attacker reaches for when
-		//                      script injection is closed off.
-		//   object-src 'none'  no plugins, ever.
+		//   img-src data:         select-arrow SVG embedded in style.css.
+		//   style-src-attr        colour swatches render style="background:{{.Hex}}"
+		//                         from owner-editable DB rows. Split out so
+		//                         style-src stays strict: inline ATTRIBUTES are
+		//                         allowed, an injected <style> block is not.
+		//   base-uri/form-action  <base> injection and form hijacking.
 		ContentSecurityPolicy: "default-src 'self'; " +
 			"script-src 'self'; " +
 			"style-src 'self'; " +
@@ -124,21 +96,17 @@ func newServer(cfg Config) (*echo.Echo, error) {
 			"frame-ancestors 'self'; " +
 			"object-src 'none'",
 
-		// A CSP mistake fails silently and totally: the browser refuses to run
-		// the blocked script and the server logs nothing, so the carousels,
-		// mobile nav, and contact form would break with no signal here. Deploy
-		// with CSP_REPORT_ONLY=true, click through every page with devtools
-		// open, then remove it. Kept as an env var rather than a code constant
-		// so reverting is a restart, not a rebuild and redeploy.
+		// A CSP mistake fails silently and totally — the browser blocks the
+		// script and nothing is logged server-side, so carousels, mobile nav and
+		// the contact form break with no signal here. Deploy with
+		// CSP_REPORT_ONLY=true, click through with devtools open, then remove.
+		// An env var so reverting is a restart, not a redeploy.
 		CSPReportOnly: cfg.CSPReportOnly,
 	}))
 
-	// Permissions-Policy has no field in Echo's SecureConfig, so it is set
-	// here. It denies the powerful browser APIs outright — nothing on this site
-	// uses the camera, microphone, or location, so an empty allowlist for each
-	// costs nothing and means an injected script cannot prompt a visitor for
-	// them under this domain's name. Defence in depth behind the CSP, not a
-	// substitute for it.
+	// No field for this in Echo's SecureConfig. Nothing here uses the camera,
+	// microphone or location, so denying them costs nothing and means an
+	// injected script can't prompt a visitor under this domain's name.
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			c.Response().Header().Set("Permissions-Policy",
@@ -147,17 +115,14 @@ func newServer(cfg Config) (*echo.Echo, error) {
 		}
 	})
 
-	// Static assets are served straight off disk and their URLs never change
-	// (no build step fingerprints filenames), so without an explicit
-	// Cache-Control a browser can keep reusing a stale style.css or main.js
-	// after an edit or a deploy. "no-cache" doesn't mean "don't cache" — it
-	// means "revalidate before reusing", so an unchanged file still comes back
-	// as a cheap 304 from the Last-Modified check rather than a re-download.
+	// Nothing fingerprints these filenames, so without an explicit Cache-Control
+	// a browser reuses a stale style.css after a deploy. "no-cache" means
+	// "revalidate before reusing", not "don't cache" — an unchanged file still
+	// returns a cheap 304.
 	//
-	// Applied as a path-checked global rather than via e.Group("/public", ...):
-	// attaching middleware to a group makes Echo auto-register a catch-all
-	// RouteNotFound for that prefix, which shadows the static route and 404s
-	// every asset.
+	// A path-checked global, NOT e.Group("/public", ...): attaching middleware to
+	// a group makes Echo auto-register a catch-all RouteNotFound for that prefix,
+	// which shadows the static route and 404s every asset. That shipped once.
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			if strings.HasPrefix(c.Request().URL.Path, "/public/") {
@@ -167,37 +132,34 @@ func newServer(cfg Config) (*echo.Echo, error) {
 		}
 	})
 
-	// ─── Feature flags ────────────────────────────────────────────────────────
-	// Off unless explicitly switched on, so an unfinished feature can't reach
-	// production by accident — enabling it is a deliberate, per-environment
-	// act. Set FEATURE_INSTOCK=true in .env to work on /instock locally.
+	// Set FEATURE_INSTOCK=true in .env to work on /instock locally.
 	featureInstock := cfg.FeatureInstock
 
-	// Exposed to templates as a function rather than threaded through each
-	// handler's data map: nav.html and footer.html are included by every page,
-	// so the data-map route would mean touching every handler and remembering
-	// to do it again for each new one. Funcs have to be attached before
-	// parsing, which is why this uses template.New(...).Funcs(...) instead of
-	// the package-level template.ParseGlob.
+	// Re-normalised rather than trusted: loadConfig() already did this, but a
+	// zero-value Config built in a test would leave it empty, and e.Group("")
+	// mounts the whole admin panel at the site root behind the homepage.
+	adminPrefix := adminPath(cfg.AdminPath)
+
+	// Template funcs rather than per-handler data maps: nav.html and footer.html
+	// are included by every page, so the data-map route means touching every
+	// handler and remembering to do it again for each new one. Funcs must be
+	// attached before parsing, hence template.New().Funcs() over ParseGlob.
 	funcs := template.FuncMap{
 		"featureInstock": func() bool { return featureInstock },
-		// Render time, stamped into both public forms so the handler can reject
-		// a submission that arrived faster than a person could type. A template
-		// func rather than handler data for the same reason as featureInstock:
-		// the contact form is a partial of the homepage, so threading it through
-		// would mean editing every handler that renders a page containing a form.
+		// Render time, stamped into both public forms so the handler can reject a
+		// submission that arrived faster than a person could type.
 		"formTS": func() string { return strconv.FormatInt(time.Now().Unix(), 10) },
-		// Public origin for canonical links and Open Graph tags, both of which
-		// must be absolute. Returns "" when unset, and the templates gate the
-		// whole block on that — emitting a canonical pointing at nothing is
-		// worse than emitting none, because it actively tells search engines
-		// the real page is elsewhere.
+		// Canonical and Open Graph tags need absolute URLs. Returns "" when
+		// unset and the templates omit the whole block — a canonical pointing
+		// nowhere actively tells search engines the real page is elsewhere.
 		"siteURL": func() string { return cfg.SiteURL },
+		// Prefix for every link and htmx target in templates/admin/. Hardcoding
+		// "/admin" there would pin the panel to one path and defeat ADMIN_PATH.
+		"adminPath": func() string { return adminPrefix },
 	}
 
-	// Was template.Must, which panics with a stack trace when a glob matches
-	// nothing — the exact failure a bad Dockerfile COPY produces. Returned as
-	// an error so the caller can report which pattern failed.
+	// Not template.Must: a glob matching nothing is what a bad Dockerfile COPY
+	// produces, and an error naming the pattern beats a panic.
 	tmpl := template.New("").Funcs(funcs)
 	for _, pattern := range []string{
 		"templates/*.html",
@@ -212,8 +174,7 @@ func newServer(cfg Config) (*echo.Echo, error) {
 	e.Renderer = &TemplateRenderer{templates: tmpl}
 
 	// Echo's default handler emits JSON, so a mistyped URL rendered
-	// {"message":"Not Found"} on a marketing site and a rate-limited visitor
-	// got raw JSON swapped into the page by htmx. Set after the renderer
+	// {"message":"Not Found"} on a marketing site. Set after the renderer
 	// because it renders error.html.
 	e.HTTPErrorHandler = handlers.HTTPErrorHandler
 
@@ -225,18 +186,14 @@ func newServer(cfg Config) (*echo.Echo, error) {
 	e.GET("/robots.txt", handlers.Robots(cfg.SiteURL))
 	e.GET("/sitemap.xml", handlers.Sitemap(cfg.SiteURL, featureInstock))
 
-	// A global BodyLimit would also constrain /admin's own (larger, for photo
-	// uploads) limit below — BodyLimit wraps the body reader, so an outer
-	// stricter wrap can't be loosened by an inner looser one. Scoping this to
-	// just the public text-only POST routes avoids that conflict.
+	// Scoped to the public text-only POSTs, not global: BodyLimit wraps the body
+	// reader, so a stricter outer wrap can't be loosened by /admin's looser 40M
+	// one below.
 	publicBodyLimit := middleware.BodyLimit("3M")
 
 	// Each public form POST writes to the DB and fires an email, so without a
-	// limit one bot can flood both. Per-IP token bucket: a burst of 5, then
-	// one request every 5 seconds — far above any real customer's rate.
-	// Behind nginx this only counts real client IPs because TRUST_PROXY above
-	// installs the X-Forwarded-For extractor; without that every visitor would
-	// share one bucket.
+	// limit one bot floods both. Burst of 5, then one every 5 seconds — far above
+	// any real customer's rate.
 	formRateLimit := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
 		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
 			Rate:      rate.Limit(0.2),
@@ -251,10 +208,9 @@ func newServer(cfg Config) (*echo.Echo, error) {
 	e.Match([]string{http.MethodGet, http.MethodHead}, "/", handlers.Home)
 	e.POST("/contact", handlers.Contact, publicBodyLimit, formRateLimit)
 
-	// Not registered at all when the flag is off, so /instock returns a plain
-	// 404 rather than existing as an unlinked page someone could still reach
-	// by guessing the URL or following a stale link. Hiding only the nav link
-	// would leave the page — and its interest form — publicly live.
+	// Not registered when the flag is off, so /instock is a plain 404. Hiding
+	// only the nav link would leave the page and its interest form publicly live
+	// to anyone guessing the URL.
 	if featureInstock {
 		e.Match([]string{http.MethodGet, http.MethodHead}, "/instock", handlers.Instock)
 		e.POST("/instock/interest", handlers.InstockInterest, publicBodyLimit, formRateLimit)
@@ -271,44 +227,29 @@ func newServer(cfg Config) (*echo.Echo, error) {
 		return userOK && passOK, nil
 	})
 
-	// Basic Auth credentials auto-attach to same-origin requests regardless of
-	// which page triggered them, so /admin needs its own CSRF check on top of
-	// auth — otherwise a page an admin merely has open could silently trigger
-	// real changes. TokenLookup checks both a form field (plain POSTs from
-	// admin_new.html/admin_edit.html) and a header (htmx requests, wired via
-	// the htmx:configRequest listener in those same templates).
+	// Basic Auth credentials auto-attach to same-origin requests whatever page
+	// triggered them, so /admin needs CSRF on top of auth — otherwise a page an
+	// admin merely has open could trigger real changes. TokenLookup covers both
+	// plain form POSTs and htmx's header, wired via htmx:configRequest.
 	adminCSRF := middleware.CSRFWithConfig(middleware.CSRFConfig{
 		TokenLookup:    "header:X-CSRF-Token,form:csrf",
 		CookieHTTPOnly: true,
-		// The admin CSRF cookie is never needed on a cross-site navigation,
-		// so Strict costs nothing here and refuses to send it on any request
-		// a third-party page initiates.
 		CookieSameSite: http.SameSiteStrictMode,
-		// Must be on in production so the cookie is never sent over plain
-		// HTTP, but it can't be hardcoded: a Secure cookie is dropped
-		// entirely on a plain-HTTP connection, which would break local dev.
-		// Set COOKIE_SECURE=true wherever the site is served over HTTPS.
+		// Can't be hardcoded true: a Secure cookie is dropped entirely over
+		// plain HTTP, which breaks local dev. Set COOKIE_SECURE=true on HTTPS.
 		CookieSecure: cfg.CookieSecure,
-		// Without an explicit path, the cookie defaults to the directory of
-		// whichever admin sub-path first sets it (e.g. /admin/inventory/),
-		// so a token picked up on one admin page can silently fail on
-		// another. Scoping it to all of /admin keeps one shared cookie.
-		CookiePath: "/admin",
+		// Without an explicit path the cookie defaults to the directory of
+		// whichever admin sub-path set it first, so a token from one page fails
+		// on another.
+		CookiePath: adminPrefix,
 	})
 
-	// Basic Auth has no attempt limit of its own: without this an attacker can
-	// pipeline credential guesses at whatever rate the server will answer, and
-	// every one of them is a fresh bcrypt-free string comparison. Ordered
-	// BEFORE adminAuth in the group so rejected requests are counted too —
-	// behind the auth check it would only ever throttle the legitimate admin.
-	//
-	// Sized for a person, not a script: 20 straight through, then one every two
-	// seconds. Clicking through inventory and uploading photos stays well
-	// under that, while a guessing loop drops to 30 attempts a minute. Against
-	// the current 32-character password that rate is already hopeless, so the
-	// real wins are capping log noise and stopping off-the-shelf credential
-	// stuffing. SEC-8 (fail2ban) is the version of this that also bans the
-	// host, and covers SSH at the same time.
+	// Basic Auth has no attempt limit of its own. Ordered BEFORE adminAuth in the
+	// group so rejected requests count too — behind it, this would only throttle
+	// the legitimate admin. 20 through, then one every two seconds: ample for
+	// clicking through inventory, and a guessing loop drops to 30/minute. Against
+	// a 32-char password that's already hopeless, so the real wins are log noise
+	// and off-the-shelf credential stuffing. fail2ban also bans the host.
 	adminRateLimit := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
 		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
 			Rate:      rate.Limit(0.5),
@@ -317,7 +258,11 @@ func newServer(cfg Config) (*echo.Echo, error) {
 		}),
 	})
 
-	admin := e.Group("/admin", adminRateLimit, adminAuth, middleware.BodyLimit("40M"), adminCSRF)
+	// Mounted at cfg.AdminPath rather than a literal so the deployed path can
+	// differ from the default this repository shows. The handlers need it too,
+	// for their post-action redirects.
+	handlers.SetAdminPath(adminPrefix)
+	admin := e.Group(adminPrefix, adminRateLimit, adminAuth, middleware.BodyLimit("40M"), adminCSRF)
 	admin.GET("", handlers.AdminList)
 	admin.GET("/submissions", handlers.AdminSubmissions)
 	admin.GET("/inventory/new", handlers.AdminNewItemForm)

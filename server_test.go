@@ -308,10 +308,11 @@ func TestSEODocsPreferSiteURL(t *testing.T) {
 	if !strings.Contains(body, "Sitemap: https://prebuiltshedsllc.com/sitemap.xml") {
 		t.Errorf("robots.txt did not advertise the SITE_URL sitemap:\n%s", body)
 	}
-	// A trailing slash on Disallow would leave /admin itself crawlable, since
-	// robots.txt matching is a plain prefix match.
-	if !strings.Contains(body, "Disallow: /admin\n") {
-		t.Errorf("robots.txt does not disallow /admin:\n%s", body)
+	// robots.txt must not name the admin prefix. A Disallow line would publish
+	// the very path ADMIN_PATH exists to keep out of scanners' hands, and it
+	// never restricted access to begin with.
+	if strings.Contains(body, "Disallow:") {
+		t.Errorf("robots.txt has a Disallow line, which leaks the path it names:\n%s", body)
 	}
 }
 
@@ -360,6 +361,52 @@ func TestAdminRequiresAuth(t *testing.T) {
 	req.SetBasicAuth(testAdminUser, testAdminPass)
 	if rec := do(t, e, req); rec.Code != http.StatusOK {
 		t.Errorf("authenticated GET /admin = %d, want 200", rec.Code)
+	}
+}
+
+// ADMIN_PATH must actually relocate the group, and the default must stop
+// answering. A rename that leaves the old prefix live achieves nothing, and one
+// that misses the templates leaves every link pointing at a 404.
+func TestAdminPathRelocatesTheGroup(t *testing.T) {
+	cfg := testConfig()
+	cfg.AdminPath = "/somewhere-else"
+	e := newTestServer(t, cfg)
+
+	if rec := get(t, e, "/admin"); rec.Code != http.StatusNotFound {
+		t.Errorf("GET /admin = %d, want 404 once ADMIN_PATH moved the group", rec.Code)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/somewhere-else", nil)
+	req.SetBasicAuth(testAdminUser, testAdminPass)
+	rec := do(t, e, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("authenticated GET /somewhere-else = %d, want 200", rec.Code)
+	}
+
+	// The rendered page must link to the configured prefix, not the default.
+	if body := rec.Body.String(); strings.Contains(body, `"/admin`) {
+		t.Errorf("admin page still contains hardcoded /admin links:\n%s", body)
+	}
+
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "_csrf" && c.Path != "/somewhere-else" {
+			t.Errorf("CSRF cookie path = %q, want /somewhere-else", c.Path)
+		}
+	}
+}
+
+// An empty ADMIN_PATH must not mount the admin group at "/", which would put it
+// in front of the homepage.
+func TestAdminPathNeverMountsAtRoot(t *testing.T) {
+	cfg := testConfig()
+	cfg.AdminPath = ""
+	e := newTestServer(t, cfg)
+
+	if rec := get(t, e, "/"); rec.Code != http.StatusOK {
+		t.Errorf("GET / = %d, want 200; the admin group shadowed the homepage", rec.Code)
+	}
+	if rec := get(t, e, "/admin"); rec.Code != http.StatusUnauthorized {
+		t.Errorf("GET /admin = %d, want 401; empty ADMIN_PATH should fall back to the default", rec.Code)
 	}
 }
 
@@ -611,13 +658,28 @@ func TestStructuredDataIsValidJSON(t *testing.T) {
 		t.Errorf("url = %v", data["url"])
 	}
 
-	// Address, areaServed and sameAs must stay absent until they can be copied
-	// verbatim from the Google Business Profile. A NAP mismatch actively
-	// suppresses local ranking, so a guessed address is worse than none.
-	for _, k := range []string{"address", "areaServed", "sameAs"} {
-		if _, present := data[k]; present {
-			t.Errorf("%q is populated — verify it matches the Business Profile exactly, then remove this assertion", k)
+	// The address is the field a NAP mismatch punishes, so it is asserted
+	// whole: a block missing postalCode or addressRegion is worse than useless,
+	// because Google will still try to place the business from what is there.
+	addr, ok := data["address"].(map[string]any)
+	if !ok {
+		t.Fatalf("address missing or not an object: %v", data["address"])
+	}
+	for _, k := range []string{"streetAddress", "addressLocality", "addressRegion", "postalCode", "addressCountry"} {
+		if s, _ := addr[k].(string); s == "" {
+			t.Errorf("address.%s is empty", k)
 		}
+	}
+
+	if _, ok := data["areaServed"].([]any); !ok {
+		t.Errorf("areaServed missing or not an array: %v", data["areaServed"])
+	}
+
+	// The whole block is copied-and-filled by hand, so the placeholder token is
+	// the likely failure mode — a half-completed edit that still parses as JSON
+	// and publishes "REPLACE" as the street address.
+	if strings.Contains(m[1], "REPLACE") {
+		t.Error("JSON-LD still contains a REPLACE placeholder")
 	}
 }
 

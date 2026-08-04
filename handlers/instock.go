@@ -71,6 +71,14 @@ func filterByStatus(cards []InventoryCard, status string) []InventoryCard {
 	return filtered
 }
 
+// Instock renders the public inventory page, grouped by lot within In Stock, On
+// Hold, and Sold tabs. Sold items stay listed rather than disappearing, as
+// visible proof that stock moves.
+//
+// A failed query is logged and rendered as the empty state rather than an error
+// page: a marketing page that loses one section is better than one that 500s.
+// The route is only registered when FEATURE_INSTOCK is set, so with the flag off
+// this handler is unreachable rather than merely unlinked.
 func Instock(c echo.Context) error {
 	items, err := database.ListInventoryItems()
 	if err != nil {

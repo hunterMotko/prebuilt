@@ -6,9 +6,8 @@ notes.txt
 reviews.txt
 backups/
 
-deploy/DEPLOY.md
-deploy/OFFSITE.md
-deploy/CD.md
+deploy/*
+
 AUDIT_CHECKLIST.md
 
 docs/*

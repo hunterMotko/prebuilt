@@ -230,6 +230,12 @@ func columnExists(table, column string) (bool, error) {
 	return false, rows.Err()
 }
 
+// InventoryItem is one already-built shed sitting on a lot.
+//
+// The trailing display fields are not columns: SidingName through RoofHex are
+// filled by the color join, and Images by a follow-up query. A zero-value item
+// built by hand has them empty, so pass items from ListInventoryItems or
+// GetInventoryItem to anything that formats them, notably Describe.
 type InventoryItem struct {
 	ID         int64
 	Lot        int
@@ -255,6 +261,12 @@ type InventoryItem struct {
 	Images []InventoryImage
 }
 
+// InventoryImage is one uploaded photo. Category is exterior, interior, or
+// feature, and is admin-facing only — customers never see it.
+//
+// Filename is the server-generated name on disk, not anything the client sent.
+// Rows cascade on delete from inventory_items; the files themselves do not, so
+// whoever deletes an item must also remove its photo directory.
 type InventoryImage struct {
 	ID              int64
 	InventoryItemID int64
@@ -263,6 +275,9 @@ type InventoryImage struct {
 	CreatedAt       time.Time
 }
 
+// ColorRef is one row of the siding_colors or roof_colors reference tables.
+// Code is the supplier's opaque string and is what inventory rows store; Name
+// and Hex exist only to render a readable label and a swatch.
 type ColorRef struct {
 	Code string
 	Name string
@@ -288,6 +303,9 @@ func scanInventoryItem(row interface{ Scan(...any) error }) (InventoryItem, erro
 	return it, err
 }
 
+// CreateInventoryItem inserts an item and returns its new id. The color name and
+// hex fields on item are ignored; only the codes are stored, and the names are
+// resolved by join when the item is read back.
 func CreateInventoryItem(item InventoryItem) (int64, error) {
 	res, err := DB.Exec(
 		`INSERT INTO inventory_items (lot, style, width, length, siding_code, roof_code, status, price_cents, notes)
@@ -301,6 +319,12 @@ func CreateInventoryItem(item InventoryItem) (int64, error) {
 	return res.LastInsertId()
 }
 
+// ListInventoryItems returns every item ordered by lot, then newest first,
+// with color names, hexes, and photos populated.
+//
+// Photos come from one batched follow-up query rather than a join, because
+// joining would multiply each item's row by its photo count and require
+// de-duplicating on the way out.
 func ListInventoryItems() ([]InventoryItem, error) {
 	rows, err := DB.Query(inventorySelect + ` ORDER BY i.lot ASC, i.id DESC`)
 	if err != nil {
@@ -332,6 +356,8 @@ func ListInventoryItems() ([]InventoryItem, error) {
 	return items, nil
 }
 
+// GetInventoryItem returns one item with its colors and photos populated. It
+// returns sql.ErrNoRows if no item has that id.
 func GetInventoryItem(id int64) (InventoryItem, error) {
 	row := DB.QueryRow(inventorySelect+` WHERE i.id = ?`, id)
 	it, err := scanInventoryItem(row)
@@ -386,10 +412,12 @@ func UpdateInventoryItem(item InventoryItem) error {
 	return err
 }
 
+// ListSidingColors returns the siding reference table ordered by code.
 func ListSidingColors() ([]ColorRef, error) {
 	return listColors(`SELECT code, name, hex FROM siding_colors ORDER BY code`)
 }
 
+// ListRoofColors returns the roof reference table ordered by code.
 func ListRoofColors() ([]ColorRef, error) {
 	return listColors(`SELECT code, name, hex FROM roof_colors ORDER BY code`)
 }
@@ -424,6 +452,8 @@ func AddInventoryImage(itemID int64, filename, category string) (int64, error) {
 	return res.LastInsertId()
 }
 
+// ListInventoryImages returns one item's photos in upload order. Use
+// ListInventoryImagesForItems when loading photos for more than one item.
 func ListInventoryImages(itemID int64) ([]InventoryImage, error) {
 	rows, err := DB.Query(
 		`SELECT id, inventory_item_id, filename, category, created_at
@@ -486,6 +516,9 @@ func scanInventoryImages(rows *sql.Rows) ([]InventoryImage, error) {
 	return images, rows.Err()
 }
 
+// GetInventoryImage returns one photo row, or sql.ErrNoRows if no photo has that
+// id. Callers need it to learn the filename and owning item before deleting the
+// file from disk.
 func GetInventoryImage(id int64) (InventoryImage, error) {
 	var img InventoryImage
 	err := DB.QueryRow(

@@ -14,13 +14,10 @@ on:
 permissions:
   contents: read
 
-# A second push to the same branch cancels the first. Nothing here is worth
-# paying for twice, and the older run's result is already stale.
-#
-# Except on main, where the run also publishes an image. Cancelling mid-push
-# cannot corrupt a tag — the manifest is written last, so a half-uploaded image
-# is invisible — but it can leave `latest` pointing at the older commit while
-# the newer one reports success, which is a confusing state to debug.
+# A second push to the same branch cancels the first — except on main, where the
+# run also publishes. Cancelling can't corrupt a tag (the manifest is written
+# last) but it can leave `latest` on the older commit while the newer one reports
+# success, which is a confusing state to debug.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -32,58 +29,48 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # The Dockerfile decides which Go builds this project, so CI installs
-      # that one. Parsing it needs no toolchain, which is why this can run
-      # before setup-go.
+      # The Dockerfile decides which Go builds this project, so CI installs that
+      # one. Parsing it needs no toolchain, hence before setup-go.
       #
-      # NOT `go-version-file: go.mod`. That was the original approach and it
-      # was wrong: the `go` directive is a minimum language version, and
-      # setup-go treats it as an exact pin, so `go 1.25.0` installed Go 1.25.0
-      # and the vulnerability scan reported 26 standard-library findings that
-      # were all already fixed in later 1.25.x patches. The shipped image,
-      # built on golang:1.26-alpine, never had any of them.
+      # NOT `go-version-file: go.mod`. setup-go treats the `go` directive as an
+      # exact pin rather than the minimum it is, so `go 1.25.0` installed 1.25.0
+      # and govulncheck reported 26 stdlib findings already fixed in later
+      # patches. The shipped image, on golang:1.26-alpine, had none of them.
       - id: go
         run: echo "version=$(make print-go-version)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-go@v7
         with:
           go-version: ${{ steps.go.outputs.version }}
-          # Resolve to the newest patch of that minor, mirroring how the
-          # golang:<minor>-alpine tag resolves. Without this a cached toolchain
-          # can pin an early patch and reintroduce exactly the problem above.
+          # Newest patch of that minor, mirroring how golang:<minor>-alpine
+          # resolves. Without it a cached toolchain reintroduces the above.
           check-latest: true
           cache: true
 
-      # setup-go v6 began setting GOTOOLCHAIN=local, which suits this repo:
-      # the version installed above is now the version that actually runs,
-      # instead of go silently downloading whatever the go directive asks for.
-      # A Dockerfile older than go.mod fails here loudly rather than passing CI
-      # on a downloaded toolchain and breaking the deploy — the same failure
-      # `make check-docker-go` exists to catch, now caught twice.
+      # setup-go v6+ sets GOTOOLCHAIN=local, so the version installed above is
+      # the one that runs instead of go downloading whatever go.mod asks for.
+      # A Dockerfile older than go.mod now fails here loudly.
       - run: go version && go env GOTOOLCHAIN
 
       - run: make fmt-check
       - run: make vet
       - run: make test
 
-      # Guards the exact bug this project shipped once: `go get` raised the go
-      # directive and the Dockerfile was still on the old builder image.
-      # Invisible locally, broken on deploy.
+      # Guards a bug this project shipped: `go get` raised the go directive while
+      # the Dockerfile stayed on the old builder image. Invisible locally.
       - run: make check-docker-go
 
-      # 43 end-to-end checks against a real running binary — routing, auth,
-      # CSRF via both token sources, security headers, body limits, rate
-      # limiting, spam defences. Runs against a throwaway database with SMTP
-      # forced empty.
+      # 43 end-to-end checks against a real running binary — routing, auth, CSRF
+      # via both token sources, security headers, body limits, rate limiting,
+      # spam defences. Throwaway database, SMTP forced empty.
       - run: make smoke
 
   vuln:
     name: Vulnerability scan
     runs-on: ubuntu-latest
-    # Deliberately its own job. A newly published upstream CVE turns this red
-    # without a single line of this repo changing, and that needs to be
-    # distinguishable at a glance from "my code broke" — same reason it should
-    # never be folded into the check job.
+    # Its own job: a newly published upstream CVE turns this red without a line
+    # of this repo changing, and that must be distinguishable at a glance from
+    # "my code broke".
     steps:
       - uses: actions/checkout@v7
       - id: go
@@ -103,28 +90,23 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
-      # Builds the image, runs it, and asserts it actually serves. A Go build
-      # cannot catch the failure this targets: templates and static assets are
-      # resolved by relative path at runtime, so a missing COPY produces an
-      # image that builds cleanly and panics on startup. This project reasoned
-      # about the Dockerfile for an entire development cycle without ever
-      # building it — this job is what stops that recurring.
+      # Builds the image, runs it, asserts it serves. A Go build can't catch what
+      # this targets: templates and static assets resolve by relative path at
+      # runtime, so a missing COPY builds cleanly and panics on startup.
       - run: make docker-smoke
 
   publish:
     name: Publish image to GHCR
-    # The whole reason this lives in ci.yml instead of its own cd.yml: `needs`
-    # is enforced by the job graph, so an image physically cannot reach the
-    # registry unless the tests, the vulnerability scan, and the container
-    # smoke test all went green. A separate workflow would have to chain off
-    # `workflow_run`, which fires regardless of conclusion and has to be
-    # re-checked by hand.
+    # Why this lives in ci.yml and not its own cd.yml: `needs` is enforced by the
+    # job graph, so an image physically cannot reach the registry unless all
+    # three went green. A separate workflow would chain off `workflow_run`, which
+    # fires regardless of conclusion.
     needs: [check, vuln, docker]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
-    # Narrower than a file-level grant: this is the only job that may write to
-    # the registry, so a compromised action in any other job cannot publish.
+    # Narrower than a file-level grant: the only job that may write to the
+    # registry, so a compromised action elsewhere cannot publish.
     permissions:
       contents: read
       packages: write
@@ -134,18 +116,16 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
-      # GITHUB_TOKEN, not a PAT. It is minted per-run, expires with the run,
-      # and is already scoped by the `permissions` block above — there is no
-      # long-lived secret to rotate or leak.
+      # GITHUB_TOKEN, not a PAT: minted per-run, expires with it, scoped by the
+      # permissions block above. No long-lived secret to rotate or leak.
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Two tags on every push, and the sha- one is the important half:
-      # `latest` is a moving target, so it cannot be rolled back to. sha-<short>
-      # is immutable and is what a rollback pins to.
+      # The sha- tag is the important half: `latest` is a moving target and can't
+      # be rolled back to. sha-<short> is immutable and is what a rollback pins.
       - id: meta
         uses: docker/metadata-action@v6
         with:
@@ -154,11 +134,10 @@ jobs:
             type=raw,value=latest
             type=sha,prefix=sha-,format=short
 
-      # linux/amd64 only. Adding linux/arm64 roughly doubles the job's runtime
-      # because modernc.org/sqlite is an 8.6 MB generated source file that has
-      # to be compiled once per architecture. Check the VPS with `uname -m`
-      # before assuming: aarch64 needs arm64 added here, or the pulled image
-      # will fail to start with an exec format error.
+      # amd64 only. arm64 roughly doubles runtime — modernc.org/sqlite is an
+      # 8.6 MB generated source file compiled once per architecture. Check the VPS
+      # with `uname -m`: aarch64 needs arm64 added here or the pulled image fails
+      # to start with an exec format error.
       - uses: docker/build-push-action@v7
         with:
           context: .
@@ -166,8 +145,7 @@ jobs:
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Persists the Go build cache between runs, so a typical push
-          # recompiles only the packages that changed rather than all of
-          # modernc.org/sqlite.
+          # Persists the Go build cache between runs, so a typical push recompiles
+          # only what changed rather than all of modernc.org/sqlite.
           cache-from: type=gha
           cache-to: type=gha,mode=max

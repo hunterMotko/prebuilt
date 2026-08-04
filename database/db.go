@@ -1,3 +1,13 @@
+// Package database owns the SQLite schema, its migrations, and every query the
+// application makes. It has no HTTP awareness.
+//
+// The connection pool is pinned to a single connection. SQLite enforces
+// PRAGMA foreign_keys per connection, so without the pin the ON DELETE CASCADE
+// from inventory_items to inventory_images would apply only on whichever pooled
+// connection happened to run the pragma. SQLite serializes writes regardless,
+// so the pool bought nothing at this scale.
+//
+// Migrations are idempotent and guarded, and run on every startup.
 package database
 
 import (
@@ -11,6 +21,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// DB is the process-wide connection handle, valid after Init returns without
+// error. It is a package global because every query function in this package
+// uses it and nothing else in the program needs a second database.
 var DB *sql.DB
 
 // checkDatabaseDir fails fast, and specifically, when the database's directory
@@ -49,25 +62,21 @@ func checkDatabaseDir(path string) {
 
 // Init opens the database at path and brings the schema up to date.
 //
-// The path is a parameter rather than an os.Getenv read so callers — including
-// tests — can point at a temporary file without mutating the environment. It
-// must sit inside a writable *directory*: SQLite puts its rollback-journal and
-// WAL sidecars alongside the database, so bind-mounting just the .db file would
-// leave those sidecars in a container's ephemeral layer where a crash mid-write
-// could not be rolled back.
+// path is a parameter rather than an os.Getenv read so tests can point at a
+// temporary file. It must sit inside a writable *directory*: SQLite puts its
+// journal and WAL sidecars alongside the database, so bind-mounting just the
+// .db file leaves those in a container's ephemeral layer where a crash mid-write
+// couldn't be rolled back.
 //
-// Failures here call log.Fatal rather than returning an error, deliberately.
-// Every one of them is a startup-time condition — missing directory, unwritable
-// volume, failed migration — where continuing would serve a broken site, and
-// the caller's only sane response is to exit with the same message.
+// Failures log.Fatal rather than returning an error. All of them are
+// startup-time conditions where continuing would serve a broken site.
 func Init(path string) {
 	var err error
 
-	// Checked up front because SQLite reports both "directory missing" and
-	// "directory not writable" as the same opaque CANTOPEN error, whose driver
-	// text reads "unable to open database file: out of memory (14)". That
-	// message sends you hunting for a memory problem that doesn't exist, so
-	// diagnose the real cause here instead.
+	// Up front, because SQLite reports both "directory missing" and "not
+	// writable" as the same CANTOPEN, whose driver text reads "unable to open
+	// database file: out of memory (14)" — a message that sends you hunting for
+	// a memory problem that doesn't exist.
 	checkDatabaseDir(path)
 
 	DB, err = sql.Open("sqlite", path)
@@ -96,53 +105,36 @@ func Init(path string) {
 	}
 
 	// Without this, a write that finds the database locked fails INSTANTLY with
-	// SQLITE_BUSY instead of waiting. SetMaxOpenConns(1) above serialises this
-	// process's own access, so the lock contention that matters comes from
-	// outside it: scripts/maintenance.sh runs `.backup` against the live
-	// database nightly, and `sqlite3 prebuilt.db` is the documented way to edit
-	// the colour reference tables. Either can hold a lock for long enough that
-	// a contact form submitted at that moment would have errored and told a
-	// real customer to call instead.
-	//
-	// Five seconds is far longer than any operation here legitimately takes, so
-	// in practice this converts a rare hard failure into an unnoticed pause.
+	// SQLITE_BUSY instead of waiting. SetMaxOpenConns(1) serialises this
+	// process's own access, so the contention that matters comes from outside:
+	// maintenance.sh runs `.backup` nightly, and `sqlite3 prebuilt.db` is the
+	// documented way to edit the colour tables. Either can hold a lock long
+	// enough that a contact form submitted at that moment would have errored and
+	// told a real customer to call instead.
 	if _, err := DB.Exec(`PRAGMA busy_timeout = 5000`); err != nil {
 		log.Fatal("failed to set busy_timeout:", err)
 	}
 
-	// WAL, set after busy_timeout so the mode switch itself can wait for a lock
-	// rather than failing outright.
+	// WAL, set after busy_timeout so the mode switch itself can wait for a lock.
 	//
-	// In SQLite's default rollback-journal mode a writer escalates to an
-	// EXCLUSIVE lock at COMMIT, and for that window no other process can read.
-	// The window is short — a transaction holds only a RESERVED lock until it
-	// commits, and readers are fine during that part — which is precisely why
-	// the resulting failure is intermittent rather than obvious.
+	// In rollback-journal mode a writer escalates to EXCLUSIVE at COMMIT and no
+	// other process can read for that window. It's short, which is why the
+	// failure is intermittent: a red CI run exposed it, because POST /contact
+	// returns as soon as the row is saved and a background goroutine then writes
+	// the email status. A reader in that window got SQLITE_BUSY — busy_timeout is
+	// per-connection, and a separate process gets SQLite's default of 0.
 	//
-	// It took a red CI run on main to expose one: POST /contact returns as soon
-	// as the row is saved, then a background goroutine writes the email status.
-	// A reader landing in that commit window got SQLITE_BUSY, because
-	// busy_timeout is per connection and a separate process gets SQLite's
-	// default of 0, meaning "fail immediately".
+	// Measured against this topology (one long-lived writer connection, as the
+	// pool holds, plus short-lived readers): 200 reads at timeout 0 lost 19 times
+	// under rollback-journal, 0 times under WAL. Note it inverts with short-lived
+	// WRITER processes, where the last to close attempts a checkpoint needing
+	// exclusive access — not this server, but worth knowing before assuming WAL
+	// is free elsewhere.
 	//
-	// Measured against this exact topology — one long-lived writer connection,
-	// as the pool holds here, plus short-lived reader processes — 200 reads at
-	// timeout 0 lost 19 times under rollback-journal and 0 times under WAL.
-	//
-	// The same measurement with short-lived WRITER processes inverts: WAL loses
-	// more, because the last connection to close attempts a checkpoint and needs
-	// exclusive access. That is not this server, which holds one connection for
-	// the process lifetime, but it does apply to the documented habit of editing
-	// the colour tables with `sqlite3 prebuilt.db` — occasional manual use, so
-	// it costs nothing here, but it is the reason WAL is not a free win in
-	// general.
-	//
-	// Unlike foreign_keys and busy_timeout, journal_mode is a persistent
-	// property of the file, not the connection, so this survives restarts and
-	// applies to every process that opens the database — including the sqlite3
-	// CLI. Queried rather than Exec'd because the statement RETURNS the mode
-	// actually in force, and SQLite reports success while silently keeping the
-	// old mode if the switch cannot be made.
+	// journal_mode is a property of the FILE, not the connection, so this
+	// survives restarts and applies to the sqlite3 CLI too. Queried rather than
+	// Exec'd because the statement returns the mode actually in force, and SQLite
+	// reports success while silently keeping the old one if it can't switch.
 	var journalMode string
 	if err := DB.QueryRow(`PRAGMA journal_mode = WAL`).Scan(&journalMode); err != nil {
 		log.Fatal("failed to set journal_mode:", err)
@@ -221,6 +213,11 @@ func migrateEmailDeliveryColumns() {
 	}
 }
 
+// ContactSubmission is one lead captured from a public form.
+//
+// The EmailStatus fields track delivery separately from capture: the row is
+// saved first and mailed afterwards, so a submission that failed to send is
+// still a lead the owner can act on rather than one lost silently.
 type ContactSubmission struct {
 	ID        int64
 	Name      string
@@ -236,6 +233,9 @@ type ContactSubmission struct {
 	EmailAttemptedAt sql.NullTime
 }
 
+// SaveContactSubmission stores a lead and returns its new id. The EmailStatus
+// fields are not written here; MarkEmailStatus records the delivery outcome once
+// the send has been attempted.
 func SaveContactSubmission(s ContactSubmission) (int64, error) {
 	res, err := DB.Exec(
 		`INSERT INTO contact_submissions (name, phone, email, style, size, details) VALUES (?, ?, ?, ?, ?, ?)`,

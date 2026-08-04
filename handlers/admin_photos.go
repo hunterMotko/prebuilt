@@ -11,6 +11,8 @@ import (
 	"github.com/hunterMotko/prebuilt/database"
 )
 
+// AdminDeleteImage removes one photo from an item, both the row and the file,
+// and returns an empty body for htmx to swap the thumbnail away with.
 func AdminDeleteImage(c echo.Context) error {
 	imageID, err := strconv.ParseInt(c.Param("imageId"), 10, 64)
 	if err != nil {

@@ -5,30 +5,30 @@
     results.
 
     ─────────────────────────────────────────────────────────────────────────
-    THIS BLOCK IS INCOMPLETE ON PURPOSE. Read before editing.
+    NAP CONSISTENCY: verify before trusting. Read before editing.
     ─────────────────────────────────────────────────────────────────────────
 
-    Only fields verifiable from this codebase are populated. Address, service
-    area, and the Business Profile link are OMITTED rather than guessed,
-    because for local SEO wrong data is materially worse than missing data:
-    Google cross-checks name/address/phone ("NAP") against the Business
-    Profile and other directories, and a mismatch suppresses ranking rather
-    than merely failing to help it. An address that disagrees with the profile
-    is an active penalty.
+    Google cross-checks name/address/phone ("NAP") against the Google Business
+    Profile and other directories, and a MISMATCH SUPPRESSES local ranking
+    rather than merely failing to help it. An address that disagrees with the
+    profile is an active penalty, which is why every value here has to be the
+    profile's own spelling — abbreviations ("Dr" vs "Drive"), suite
+    formatting, and all.
 
-    TO COMPLETE — copy each value EXACTLY as it appears in the Google Business
-    Profile, character for character, including abbreviations ("St" vs
-    "Street") and suite formatting:
+    The address below was supplied by the owner, not copied from the profile.
+    Open the Business Profile and confirm it renders identically; if the
+    profile says "West Houghton Lake Drive", change this to match IT, not the
+    other way round.
 
-      1. Uncomment the "address" block and fill it in.
-      2. Uncomment "areaServed" and list the towns actually served.
-      3. Uncomment "sameAs" and paste the Business Profile URL. THIS is the
-         link between site and profile — find it in the Business Profile
-         dashboard under "Share your Business Profile", or open the business
-         in Google Maps and copy the URL. Add Facebook/Instagram to the same
-         array if they exist.
-      4. Validate at https://search.google.com/test/rich-results before
-         trusting any of it.
+    "areaServed" is the towns within delivery range — a judgement call, not a
+    fact to be verified, and safe to prune or extend. Unlike the address it
+    carries no mismatch penalty.
+
+    Still to do:
+      1. Confirm the address against the profile, character for character.
+      2. Trim "areaServed" to the towns actually delivered to.
+      3. Add "sameAs" with the Business Profile URL (see the block below).
+      4. Validate at https://search.google.com/test/rich-results.
 
     Rendered only when SITE_URL is set, because @id and url must be absolute.
 
@@ -63,20 +63,35 @@
       "opens": "08:00",
       "closes": "18:00"
     }
+  ],
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "9093 W Houghton Lake Dr",
+    "addressLocality": "Houghton Lake",
+    "addressRegion": "MI",
+    "postalCode": "48629",
+    "addressCountry": "US"
+  },
+  "areaServed": [
+    { "@type": "City", "name": "Houghton Lake" },
+    { "@type": "City", "name": "Prudenville" },
+    { "@type": "City", "name": "Roscommon" },
+    { "@type": "City", "name": "Lake City" },
+    { "@type": "City", "name": "West Branch" },
+    { "@type": "City", "name": "Grayling" },
+    { "@type": "City", "name": "Cadillac" }
   ]
 
-  {{/* ---- UNCOMMENT AND COMPLETE: must match the Business Profile exactly ----
-  ,"address": {
-    "@type": "PostalAddress",
-    "streetAddress": "REPLACE",
-    "addressLocality": "REPLACE",
-    "addressRegion": "MI",
-    "postalCode": "REPLACE",
-    "addressCountry": "US"
-  }
-  ,"areaServed": [
-    { "@type": "City", "name": "REPLACE" }
-  ]
+  {{/* ---- STILL MISSING: sameAs ----
+    "sameAs" is the explicit link between this site and the Google Business
+    Profile, and it is the single highest-value field left in this block. It
+    needs the profile's own URL, which cannot be derived from anything in this
+    repo — get it from the Business Profile dashboard under "Share your
+    Business Profile", or open the business in Google Maps and copy the URL.
+    Add Facebook/Instagram to the same array if they exist.
+
+    Uncomment the comma above and this block together:
+
   ,"sameAs": [
     "REPLACE — Google Business Profile URL"
   ]

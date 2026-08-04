@@ -27,19 +27,18 @@ server.go        the wired Echo instance: middleware, templates, routes
 config.go        every environment-driven setting, resolved once
 handlers/        one file per route group; HTTP concerns only
 database/        schema, migrations, queries; no HTTP awareness
-templates/       layout + partials; admin has its own template set
+templates/       layout + partials; the protected area has its own set
 public/          static assets, uploaded photos
-deploy/          nginx server block
 ```
 
 Requests are server-rendered end to end. htmx handles the two interactions that
-benefit from partial updates — contact submission and admin status changes — by
+benefit from partial updates — contact submission and inventory status changes — by
 swapping HTML fragments returned from the same handlers. No client-side state,
 no JSON API, no hydration.
 
-**Routes.** Public: `/`, `/contact`, `/instock`. Admin: `/admin/*` behind auth,
-CSRF, and a separate body limit. `robots.txt` and `sitemap.xml` are served from
-the root, not `/public`.
+**Routes.** Public: `/`, `/contact`, `/instock`. A management route group sits
+behind auth, CSRF, and a separate body limit at a configurable prefix.
+`robots.txt` and `sitemap.xml` are served from the root, not `/public`.
 
 ---
 
@@ -92,8 +91,8 @@ Migrations are idempotent and guarded — safe to run on every boot.
 
 ## Security
 
-- CSRF on all admin mutations, covering both form posts and htmx requests;
-  cookie explicitly scoped to `/admin`, `SameSite=Strict`, `Secure` in production
+- CSRF on every authenticated mutation, covering both form posts and htmx
+  requests; cookie path-scoped, `SameSite=Strict`, `Secure` in production
 - Per-IP rate limiting on public form endpoints
 - `nosniff`, `X-Frame-Options`, and HSTS (set explicitly — Echo's default
   `HSTSMaxAge` is `0`, which silently disables it)
@@ -141,7 +140,7 @@ Set via environment or `.env`. Unset flags default to off.
 | `PORT` | Listen port (default `8080`) |
 | `DB_PATH` | SQLite file location (default `./prebuilt.db`) |
 | `SMTP_*`, `CONTACT_EMAIL` | Contact form delivery; skipped if unset |
-| `ADMIN_USER`, `ADMIN_PASS` | Admin credentials |
+| `ADMIN_USER`, `ADMIN_PASS`, `ADMIN_PATH` | Credentials and mount prefix for the protected routes |
 | `TRUST_PROXY` | Read client IP from `X-Forwarded-For`. Required behind nginx |
 | `COOKIE_SECURE` | Mark cookies `Secure`. Requires HTTPS |
 | `FEATURE_INSTOCK` | Enables the public inventory page |
@@ -150,10 +149,24 @@ Set via environment or `.env`. Unset flags default to off.
 
 ## Deployment
 
+CI builds and publishes the image to GHCR behind a `needs:` gate, so an image
+that failed tests cannot reach the registry. The server pulls that image rather
+than compiling:
+
 ```bash
-cp .env.example .env
-docker compose up -d --build
+docker compose pull
+docker compose up -d --no-build
 ```
+
+`--no-build` is not optional there. `docker-compose.yml` sets both `build:` and
+`image:`, so a plain `up -d` with no cached image silently starts compiling
+instead — and `modernc.org/sqlite` is a single 8.6 MB generated source file that
+takes minutes on one vCPU. Building locally is the other direction:
+`docker compose up -d --build`.
+
+Every image is also tagged `sha-<short>`, so a rollback is
+`IMAGE_TAG=sha-1a2b3c4 docker compose up -d`. `latest` is a moving tag and
+cannot be rolled back to.
 
 nginx and certbot run on the host and terminate TLS. The app runs in Docker and
 binds to loopback only — Docker writes its own iptables rules that bypass the
@@ -168,19 +181,27 @@ the disk and stall SQLite writes.
 
 Two settings are mandatory behind the proxy and are set in compose:
 `TRUST_PROXY`, so per-IP rate limiting sees the real client rather than nginx,
-and `COOKIE_SECURE`. The server block is in `deploy/nginx.conf.example` — note
-its `client_max_body_size`, which must be at least the app's upload limit or
-nginx rejects photo uploads with a 413 before the request ever reaches a
-handler.
+and `COOKIE_SECURE`. The proxy also needs `client_max_body_size` raised to at
+least the app's upload limit — nginx defaults to 1 MB and otherwise rejects
+photo uploads with a bare 413 before the request reaches a handler.
 
-Provisioning, DNS, and certificate issuance are covered in an operational
-runbook maintained outside this repository.
+Provisioning, DNS, certificate issuance, the nginx server block, and backup
+policy live in operational runbooks maintained outside this repository, since
+they describe one specific server rather than the software.
 
 ---
 
 ## Status
 
 The marketing site and contact flow are production-ready. The inventory page is
-built and feature-flagged off pending real inventory data. Session-based admin
-auth is specified but not yet implemented — the admin panel currently uses HTTP
-Basic Auth, which has no logout. Backups are not yet automated.
+built and feature-flagged off pending real inventory data.
+
+The protected routes use HTTP Basic Auth. Session auth was specified and then
+deliberately not built: over HTTPS, with a long password, per-IP rate limiting,
+CSRF, and fail2ban, the only thing it adds for a single operator is a logout
+button. Revisit if a second person ever needs access.
+
+Nightly backups are scripted — a consistent `sqlite3 .backup`, an incremental
+photo mirror, and pruning. The off-box copy is not yet enabled, so every backup
+currently sits on the same disk as the data it protects. That is the largest
+remaining operational gap.

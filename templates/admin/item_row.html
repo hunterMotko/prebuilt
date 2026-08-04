@@ -11,7 +11,7 @@
     <td>{{if .PriceDisplay}}{{.PriceDisplay}}{{else}}&mdash;{{end}}</td>
     <td>{{len .Images}}</td>
     <td>
-        <form hx-post="/admin/inventory/{{.ID}}/status" hx-target="closest tr" hx-swap="outerHTML">
+        <form hx-post="{{adminPath}}/inventory/{{.ID}}/status" hx-target="closest tr" hx-swap="outerHTML">
             <!-- data-autosubmit replaces an inline onchange handler, which the
                  CSP blocks. The listener lives in public/js/admin.js. -->
             <select name="status" data-autosubmit>
@@ -22,11 +22,11 @@
         </form>
     </td>
     <td class="admin-row-actions">
-        <a href="/admin/inventory/{{.ID}}/edit" class="btn btn-outline btn-sm">Edit</a>
+        <a href="{{adminPath}}/inventory/{{.ID}}/edit" class="btn btn-outline btn-sm">Edit</a>
         <button
             type="button"
             class="btn btn-outline btn-sm"
-            hx-delete="/admin/inventory/{{.ID}}"
+            hx-delete="{{adminPath}}/inventory/{{.ID}}"
             hx-target="closest tr"
             hx-swap="outerHTML"
             hx-confirm="Delete this item permanently? This cannot be undone."

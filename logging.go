@@ -10,24 +10,6 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// Request logging policy
-//
-// nginx sits in front of this app and already writes an access-log line for
-// every request that reaches it, so duplicating that here would double the
-// disk I/O to record the same facts. nginx is the system of record for raw
-// traffic; this logger records only what nginx cannot see — why a request
-// failed — plus the responses that indicate abuse.
-//
-// Deliberately NOT logged:
-//   - any 2xx/3xx: nginx has them, and they are the overwhelming majority
-//   - 404: nginx has these too, and unmatched-route noise from bot scanners is
-//     the bulk of it. Scanning patterns are better handled at the nginx layer
-//     (fail2ban reads its access log directly) than by filling this one.
-//
-// Request bodies and form values are never logged. They contain customer
-// names, phone numbers, and email addresses, which do not belong in a log file
-// that is not covered by the site's data-retention policy.
-
 var reqLog = log.New(os.Stdout, "", 0)
 
 // classify turns a status code into a stable, greppable category. These strings
@@ -64,7 +46,23 @@ type requestLogEntry struct {
 	Error     string `json:"error,omitempty"`
 }
 
-// errorOnlyLogger logs 4xx and 5xx responses and nothing else.
+// errorOnlyLogger returns middleware that logs 4xx and 5xx responses as JSON
+// lines on stdout, and nothing else.
+//
+// nginx sits in front of this app and already writes an access-log line for
+// every request that reaches it, so duplicating that here would double the disk
+// I/O to record the same facts. nginx is the system of record for raw traffic;
+// this logger records only what nginx cannot see, which is why a request failed,
+// plus the responses that indicate abuse.
+//
+// Deliberately not logged:
+//   - Any 2xx or 3xx. nginx has them, and they are the overwhelming majority.
+//   - 404. nginx has these too, and unmatched-route noise from bot scanners is
+//     the bulk of it. Scanning is better handled where the data already lives,
+//     since fail2ban reads nginx's access log directly.
+//   - Request bodies and form values. They hold customer names, phone numbers,
+//     and email addresses, which do not belong in a log file that no retention
+//     policy covers.
 func errorOnlyLogger() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
