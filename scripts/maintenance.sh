@@ -17,9 +17,13 @@
 #     Uploaded filenames are random and never rewritten, so `cp -n` copies only
 #     genuinely new files. A nightly tarball would rewrite every photo forever.
 #
-# Install (run as the user that owns the deploy, not root):
-#   crontab -e
-#   15 3 * * * cd /srv/prebuilt && nice -n 19 ionice -c3 ./scripts/maintenance.sh >> backups/maintenance.log 2>&1
+# Install: the invoking user must be able to reach the docker daemon. If the
+# deploy user is in the docker group, use its crontab; on boxes where that
+# membership is deliberately withheld (docker-socket access is root-equivalent),
+# use root's instead: `sudo crontab -e`. Absolute paths on both sides — the
+# script self-locates, so the path only has to find it, but a relative log path
+# under cron fails silently:
+#   15 3 * * * nice -n 19 ionice -c3 /path/to/repo/scripts/maintenance.sh >> /path/to/repo/backups/maintenance.log 2>&1
 #
 # nice/ionice keep this off the critical path: even under load it yields CPU
 # and disk to request handling rather than competing with it.
@@ -33,12 +37,25 @@ KEEP_DAYS=${KEEP_DAYS:-14}
 CONTAINER=${CONTAINER:-prebuilt-sheds}
 STAMP=$(date +%Y-%m-%d)
 
-mkdir -p "$BACKUP_DIR/db" "$BACKUP_DIR/uploads"
-
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-if ! docker inspect "$CONTAINER" >/dev/null 2>&1; then
-	log "ERROR: container '$CONTAINER' not found — is the stack running?"
+if ! mkdir -p "$BACKUP_DIR/db" "$BACKUP_DIR/uploads" 2>/dev/null; then
+	log "ERROR: cannot create '$BACKUP_DIR' — check the path and its ownership"
+	exit 1
+fi
+
+# Capture stderr separately: without this, a permission-denied on the docker
+# socket is indistinguishable from a missing container, and the error message
+# blames the wrong thing.
+if ! INSPECT_ERR=$(docker inspect "$CONTAINER" 2>&1 >/dev/null); then
+	case "$INSPECT_ERR" in
+	*[Pp]ermission\ denied*)
+		log "ERROR: cannot reach the docker daemon (permission denied) — run via sudo or from root's crontab"
+		;;
+	*)
+		log "ERROR: container '$CONTAINER' not found — is the stack running?"
+		;;
+	esac
 	exit 1
 fi
 
