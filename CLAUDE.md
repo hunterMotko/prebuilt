@@ -15,16 +15,42 @@ subject rather than starting a parallel record.
 | Go doc comments | Package and identifier behaviour, in godoc style | yes |
 | `docs/ADMIN.md` | The management panel: routing, uploads, photo schema | no |
 | `docs/BACKLOG.md` | **All** open work, and what was cut and why | no |
+| `docs/DECISIONS.md` | Standing choices and why — the ones costly to reverse | no |
 | `docs/LOGGING_AND_BACKUPS.md` | What is recorded and retained, and the restore procedure | no |
+| `docs/SERVER_STATE.md` | Reconciling the droplet with this repo; open questions to the owner | no |
 | `deploy/DEPLOY.md` | Provisioning the VPS from scratch | no |
 | `deploy/CD.md` | The deploy loop | no |
-| `deploy/NGINX.md` | Rationale for `nginx.conf.example`, and pre-reload verification | no |
+| `deploy/NGINX.md` | Rationale for the live nginx config, and pre-reload verification | no |
 | `deploy/OFFSITE.md` | Off-box backup target | no |
-| `AUDIT_CHECKLIST.md` | Archived audit history. Superseded — do not add to it | no |
+| `docs/resolved/`, `deploy/resolved/` | Closed items, archived in full. Read-only | no |
 
 Everything under `deploy/` and `docs/` is gitignored and local to the owner's
 machine, because it describes one specific server. Do not add operational
 detail — hostnames, paths, credentials, runbook steps — to the tracked files.
+
+### Closing something out
+
+Live documents hold only open work. When an item resolves, **move it — do not
+just mark it done.** Documents that only ever grow stop being read.
+
+1. Cut the whole section, with its reasoning, into the matching archive:
+   `docs/X.md` → `docs/resolved/X.md`, `deploy/X.md` → `deploy/resolved/X.md`.
+   Create the archive file if it does not exist; newest entries go on top.
+2. Leave a dated one-line pointer where it was, so the trail survives.
+3. Update the live document's status table.
+
+Two rules that make the archive worth keeping:
+
+- **Archive the reasoning, not just the outcome.** "Fixed" is worth nothing
+  later. *Why* it broke, what was ruled out, and what was believed and turned
+  out wrong are what stop the same ground being re-covered. A wrong hypothesis
+  that cost real time belongs in the archive as much as the fix does.
+- **Nothing in an archive is ever an instruction.** If a closed item still
+  implies future work, that work belongs in `docs/BACKLOG.md` or a live
+  document's queue — never left implicit in the archive.
+
+Standing choices are the exception: they go to `docs/DECISIONS.md`, not an
+archive, because they describe how the system works now.
 
 ## Stack
 
