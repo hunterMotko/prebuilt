@@ -1598,6 +1598,25 @@ button {
 	font-weight: 700;
 }
 
+/* Gravel pad promo — a .specs-shared panel placed after the tiers */
+.specs-promo {
+	margin-bottom: 1.5rem;
+}
+
+.specs-promo p {
+	color: var(--chrome);
+	font-size: .9rem;
+	max-width: 34rem;
+	margin: 0 auto 1rem;
+}
+
+.specs-promo-actions {
+	display: flex;
+	gap: .75rem;
+	justify-content: center;
+	flex-wrap: wrap;
+}
+
 .specs-tiers {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
