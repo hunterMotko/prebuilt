@@ -181,6 +181,13 @@ func TestSecurityHeaders(t *testing.T) {
 			t.Errorf("script-src permits 'unsafe-inline': %q", scriptSrc)
 		}
 	}
+
+	// style-src-attr 'unsafe-inline' existed solely for the color swatch
+	// style attributes; those are gone, and no template emits inline styles.
+	// If this directive reappears, something reintroduced them.
+	if strings.Contains(csp, "style-src-attr") {
+		t.Errorf("CSP contains style-src-attr, which nothing should need: %q", csp)
+	}
 }
 
 // HSTS must stay dormant on plain HTTP — a Strict-Transport-Security header

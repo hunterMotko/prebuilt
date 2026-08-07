@@ -30,18 +30,6 @@ var styleLetters = map[string]string{
 
 func createInventoryTables() {
 	schema := `
-	CREATE TABLE IF NOT EXISTS siding_colors (
-		code TEXT PRIMARY KEY,
-		name TEXT NOT NULL,
-		hex  TEXT NOT NULL
-	);
-
-	CREATE TABLE IF NOT EXISTS roof_colors (
-		code TEXT PRIMARY KEY,
-		name TEXT NOT NULL,
-		hex  TEXT NOT NULL
-	);
-
 	CREATE TABLE IF NOT EXISTS inventory_items (
 		id             INTEGER PRIMARY KEY AUTOINCREMENT,
 		lot            INTEGER NOT NULL CHECK (lot IN (1, 2, 3)),
@@ -73,23 +61,18 @@ func createInventoryTables() {
 
 	migrateLegacyImageFilename()
 	migrateInventoryItemsPositiveChecks()
+	migrateDropColorTables()
+}
 
-	// Placeholder color codes — replace with real supplier codes via sqlite3.
-	seed := `
-	INSERT OR IGNORE INTO siding_colors (code, name, hex) VALUES
-		('10', 'Placeholder White', '#F2F1EC'),
-		('20', 'Placeholder Tan',   '#D8C9A3'),
-		('30', 'Placeholder Red',   '#8B2E2E'),
-		('40', 'Placeholder Green', '#3F5E3A');
-
-	INSERT OR IGNORE INTO roof_colors (code, name, hex) VALUES
-		('10', 'Placeholder Black',    '#1C1C1C'),
-		('20', 'Placeholder Charcoal', '#3A3A3A'),
-		('30', 'Placeholder Brown',    '#5B4636'),
-		('40', 'Placeholder Gray',     '#8A8A8A');`
-
-	if _, err := DB.Exec(seed); err != nil {
-		log.Fatal("failed to seed color tables:", err)
+// migrateDropColorTables removes the siding_colors/roof_colors reference
+// tables. Codes were made free-text: the tables only ever fed swatches and
+// display names, no foreign key referenced them, and the codes themselves
+// live on inventory_items — so dropping them loses nothing. Idempotent.
+func migrateDropColorTables() {
+	if _, err := DB.Exec(
+		`DROP TABLE IF EXISTS siding_colors; DROP TABLE IF EXISTS roof_colors;`,
+	); err != nil {
+		log.Fatal("failed to drop color reference tables:", err)
 	}
 }
 
@@ -232,10 +215,8 @@ func columnExists(table, column string) (bool, error) {
 
 // InventoryItem is one already-built shed sitting on a lot.
 //
-// The trailing display fields are not columns: SidingName through RoofHex are
-// filled by the color join, and Images by a follow-up query. A zero-value item
-// built by hand has them empty, so pass items from ListInventoryItems or
-// GetInventoryItem to anything that formats them, notably Describe.
+// Images is not a column: it is filled by a follow-up query in List/Get, so a
+// zero-value item built by hand has it empty.
 type InventoryItem struct {
 	ID         int64
 	Lot        int
@@ -249,12 +230,6 @@ type InventoryItem struct {
 	Notes      string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
-
-	// Populated only by queries that JOIN the color tables (List/Get below).
-	SidingName string
-	SidingHex  string
-	RoofName   string
-	RoofHex    string
 
 	// Populated separately by List/Get below (a second query, not a JOIN —
 	// joining would multiply the item's row per photo).
@@ -275,37 +250,21 @@ type InventoryImage struct {
 	CreatedAt       time.Time
 }
 
-// ColorRef is one row of the siding_colors or roof_colors reference tables.
-// Code is the supplier's opaque string and is what inventory rows store; Name
-// and Hex exist only to render a readable label and a swatch.
-type ColorRef struct {
-	Code string
-	Name string
-	Hex  string
-}
-
 const inventorySelect = `
 	SELECT i.id, i.lot, i.style, i.width, i.length, i.siding_code, i.roof_code, i.status,
-	       i.price_cents, i.notes, i.created_at, i.updated_at,
-	       COALESCE(sc.name, i.siding_code), COALESCE(sc.hex, '#999999'),
-	       COALESCE(rc.name, i.roof_code),   COALESCE(rc.hex, '#999999')
-	FROM inventory_items i
-	LEFT JOIN siding_colors sc ON sc.code = i.siding_code
-	LEFT JOIN roof_colors  rc ON rc.code = i.roof_code`
+	       i.price_cents, i.notes, i.created_at, i.updated_at
+	FROM inventory_items i`
 
 func scanInventoryItem(row interface{ Scan(...any) error }) (InventoryItem, error) {
 	var it InventoryItem
 	err := row.Scan(
 		&it.ID, &it.Lot, &it.Style, &it.Width, &it.Length, &it.SidingCode, &it.RoofCode, &it.Status,
 		&it.PriceCents, &it.Notes, &it.CreatedAt, &it.UpdatedAt,
-		&it.SidingName, &it.SidingHex, &it.RoofName, &it.RoofHex,
 	)
 	return it, err
 }
 
-// CreateInventoryItem inserts an item and returns its new id. The color name and
-// hex fields on item are ignored; only the codes are stored, and the names are
-// resolved by join when the item is read back.
+// CreateInventoryItem inserts an item and returns its new id.
 func CreateInventoryItem(item InventoryItem) (int64, error) {
 	res, err := DB.Exec(
 		`INSERT INTO inventory_items (lot, style, width, length, siding_code, roof_code, status, price_cents, notes)
@@ -320,7 +279,7 @@ func CreateInventoryItem(item InventoryItem) (int64, error) {
 }
 
 // ListInventoryItems returns every item ordered by lot, then newest first,
-// with color names, hexes, and photos populated.
+// with photos populated.
 //
 // Photos come from one batched follow-up query rather than a join, because
 // joining would multiply each item's row by its photo count and require
@@ -410,34 +369,6 @@ func UpdateInventoryItem(item InventoryItem) error {
 		item.PriceCents, item.Notes, item.ID,
 	)
 	return err
-}
-
-// ListSidingColors returns the siding reference table ordered by code.
-func ListSidingColors() ([]ColorRef, error) {
-	return listColors(`SELECT code, name, hex FROM siding_colors ORDER BY code`)
-}
-
-// ListRoofColors returns the roof reference table ordered by code.
-func ListRoofColors() ([]ColorRef, error) {
-	return listColors(`SELECT code, name, hex FROM roof_colors ORDER BY code`)
-}
-
-func listColors(query string) ([]ColorRef, error) {
-	rows, err := DB.Query(query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var colors []ColorRef
-	for rows.Next() {
-		var c ColorRef
-		if err := rows.Scan(&c.Code, &c.Name, &c.Hex); err != nil {
-			return nil, err
-		}
-		colors = append(colors, c)
-	}
-	return colors, rows.Err()
 }
 
 // AddInventoryImage records one already-saved-to-disk photo against an item.
@@ -545,11 +476,9 @@ func GenerateCode(item InventoryItem) string {
 
 // Describe builds a full human-readable breakdown, reusable anywhere the raw
 // code isn't enough (item detail, a sale record, a lot-move log). Pure
-// formatting — trusts the caller to pass an item that already has
-// SidingName/SidingHex/RoofName/RoofHex populated (i.e. came from
-// ListInventoryItems/GetInventoryItem, not a bare struct).
+// formatting on the item's own fields — safe on a bare struct.
 func Describe(item InventoryItem) string {
-	return fmt.Sprintf("Lot %d · %d×%d %s · Siding: %s (%s) · Roof: %s (%s)",
+	return fmt.Sprintf("Lot %d · %d×%d %s · Siding %s · Roof %s",
 		item.Lot, item.Width, item.Length, item.Style,
-		item.SidingName, item.SidingHex, item.RoofName, item.RoofHex)
+		item.SidingCode, item.RoofCode)
 }

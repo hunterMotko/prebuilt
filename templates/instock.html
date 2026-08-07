@@ -189,10 +189,6 @@
     <div class="instock-card-body">
         <h3 class="instock-title">{{.Width}}&times;{{.Length}} {{.Style}}</h3>
         <p class="instock-lot">Lot {{.Lot}}</p>
-        <div class="instock-colors">
-            <span class="color-swatch" style="background:{{.SidingHex}}" title="Siding: {{.SidingName}}"></span>
-            <span class="color-swatch" style="background:{{.RoofHex}}" title="Roof: {{.RoofName}}"></span>
-        </div>
         {{if .PriceDisplay}}
         <p class="instock-price">{{.PriceDisplay}}</p>
         {{else}}

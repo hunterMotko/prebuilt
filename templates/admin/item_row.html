@@ -4,10 +4,7 @@
     <td>{{.Lot}}</td>
     <td>{{.Width}}&times;{{.Length}}</td>
     <td>{{.Style}}</td>
-    <td>
-        <span class="color-swatch" style="background:{{.SidingHex}}" title="Siding: {{.SidingName}}"></span>
-        <span class="color-swatch" style="background:{{.RoofHex}}" title="Roof: {{.RoofName}}"></span>
-    </td>
+    <td class="nowrap">{{.SidingCode}} / {{.RoofCode}}</td>
     <td>{{if .PriceDisplay}}{{.PriceDisplay}}{{else}}&mdash;{{end}}</td>
     <td>{{len .Images}}</td>
     <td>

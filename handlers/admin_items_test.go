@@ -87,6 +87,10 @@ func TestParseInventoryFormValidation(t *testing.T) {
 		{"lot zero", func(v url.Values) { v.Set("lot", "0") }},
 		{"lot out of range", func(v url.Values) { v.Set("lot", "4") }},
 		{"unknown style", func(v url.Values) { v.Set("style", "Yurt") }},
+		// Codes are free text since the reference tables were removed; the
+		// maxlength attribute is client-side only.
+		{"overlong siding code", func(v url.Values) { v.Set("siding_code", strings.Repeat("9", 21)) }},
+		{"overlong roof code", func(v url.Values) { v.Set("roof_code", strings.Repeat("9", 21)) }},
 	}
 
 	for _, tc := range cases {

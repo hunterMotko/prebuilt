@@ -75,19 +75,15 @@ func newServer(cfg Config) (*echo.Echo, error) {
 		HSTSExcludeSubdomains: true,
 
 		// Every asset is same-origin (htmx is vendored, no CDN/fonts/analytics),
-		// so 'self' needs no host allowlist and no nonce — the two admin inline
-		// blocks moved to public/js/admin.js.
+		// so 'self' needs no host allowlist, no nonce, and no inline styles of
+		// any kind — the two admin inline blocks moved to public/js/admin.js,
+		// and the color swatches that once needed style-src-attr are gone.
 		//
 		//   img-src data:         select-arrow SVG embedded in style.css.
-		//   style-src-attr        colour swatches render style="background:{{.Hex}}"
-		//                         from owner-editable DB rows. Split out so
-		//                         style-src stays strict: inline ATTRIBUTES are
-		//                         allowed, an injected <style> block is not.
 		//   base-uri/form-action  <base> injection and form hijacking.
 		ContentSecurityPolicy: "default-src 'self'; " +
 			"script-src 'self'; " +
 			"style-src 'self'; " +
-			"style-src-attr 'unsafe-inline'; " +
 			"img-src 'self' data:; " +
 			"font-src 'self'; " +
 			"connect-src 'self'; " +

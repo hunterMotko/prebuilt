@@ -37,11 +37,10 @@ func TestGenerateCode(t *testing.T) {
 func TestDescribe(t *testing.T) {
 	item := InventoryItem{
 		Lot: 1, Width: 12, Length: 24, Style: StyleGable,
-		SidingName: "Barn Red", SidingHex: "#8B2E2E",
-		RoofName: "Charcoal", RoofHex: "#3A3A3A",
+		SidingCode: "23", RoofCode: "45",
 	}
 
-	want := "Lot 1 · 12×24 Gable · Siding: Barn Red (#8B2E2E) · Roof: Charcoal (#3A3A3A)"
+	want := "Lot 1 · 12×24 Gable · Siding 23 · Roof 45"
 	if got := Describe(item); got != want {
 		t.Errorf("Describe() = %q, want %q", got, want)
 	}

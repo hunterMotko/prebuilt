@@ -1853,20 +1853,6 @@ button {
 	margin-bottom: .75rem;
 }
 
-.instock-colors {
-	display: flex;
-	gap: .5rem;
-	margin-bottom: .75rem;
-}
-
-.color-swatch {
-	width: 20px;
-	height: 20px;
-	border-radius: 50%;
-	border: 1px solid var(--border);
-	display: inline-block;
-}
-
 .instock-price {
 	font-size: 1.2rem;
 	font-weight: 700;
@@ -1931,13 +1917,6 @@ button {
 .admin-row-actions { display: flex; gap: .5rem; }
 
 .admin-form { max-width: 640px; }
-
-.color-legend {
-	display: flex;
-	flex-wrap: wrap;
-	gap: .4rem;
-	margin-top: .5rem;
-}
 
 .photo-upload-row {
 	display: grid;
