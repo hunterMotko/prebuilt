@@ -8,6 +8,11 @@
     <link rel="icon" type="image/png" href="/public/images/pbs-logo.png">
     <link rel="stylesheet" href="/public/css/style.css">
     <meta name="csrf-token" content="{{.CSRFToken}}">
+    <!-- htmx otherwise injects an inline <style> for .htmx-indicator, which
+         style-src 'self' blocks; the spinner rules live in style.css instead. -->
+    <meta name="htmx-config" content='{"includeIndicatorStyles":false}'>
+    <script src="/public/js/htmx.min.js" defer></script>
+    <script src="/public/js/admin.js" defer></script>
 </head>
 <body class="admin-body">
 
@@ -39,28 +44,15 @@
                     <th>Shed</th>
                     <th>Details</th>
                     <th>Notification</th>
+                    <th>Lead</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
                 {{range .Cards}}
-                <tr class="{{if .Warning}}admin-row--warn{{end}}">
-                    <td class="nowrap">{{.CreatedAt.Format "Jan 2, 2006 3:04 PM"}}</td>
-                    <td>{{.Name}}</td>
-                    <td class="nowrap"><a href="tel:{{.Phone}}">{{.Phone}}</a></td>
-                    <td><a href="mailto:{{.Email}}">{{.Email}}</a></td>
-                    <td>{{.Style}} {{.Size}}</td>
-                    <td class="admin-details">{{.Details}}</td>
-                    <td>
-                        <span class="delivery delivery--{{.StatusClass}}">{{.StatusLabel}}</span>
-                        {{if .EmailError}}
-                        <!-- The raw SMTP error, shown so the cause is visible
-                             without shelling into the server for logs. -->
-                        <div class="delivery-error">{{.EmailError}}</div>
-                        {{end}}
-                    </td>
-                </tr>
+                {{template "admin_submission_row.html" .}}
                 {{else}}
-                <tr><td colspan="7" class="admin-empty">No contact submissions yet.</td></tr>
+                <tr><td colspan="9" class="admin-empty">No contact submissions yet.</td></tr>
                 {{end}}
             </tbody>
         </table>

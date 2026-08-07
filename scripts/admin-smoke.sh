@@ -22,7 +22,10 @@
 # place, the delegated data-autosubmit listener surviving that swap, photo
 # upload and deletion, and CSP violations. Those are the manual browser pass.
 
-PORT=8099
+# Overridable because any other dev server on the same port makes every check
+# interrogate the wrong process — the failures look like app bugs, not a
+# port collision. The default is deliberately obscure.
+PORT="${SMOKE_PORT:-8471}"
 BASE="http://127.0.0.1:${PORT}"
 USER="smoke"
 PASS="smoketest"
@@ -215,6 +218,33 @@ check "POST /contact honeypot"      200 "$(status -X POST "${BASE}/contact" -d "
 check "POST /contact instant submit" 200 "$(status -X POST "${BASE}/contact" -d "${form}&form_ts=$(date +%s)")"
 check "only the real lead saved"    1 "$(sq "$DB" 'SELECT COUNT(*) FROM contact_submissions;')"
 check "spam rejections logged"      2 "$(grep -c spam_rejected "$SRV_LOG")"
+
+echo
+echo "=== submission lead status + delete ==="
+# Rides the one real lead saved above; jar + token from the CSRF section are
+# still valid on this server instance.
+sub_id="$(sq "$DB" 'SELECT id FROM contact_submissions LIMIT 1;')"
+check "lead status defaults to new" new \
+	"$(sq "$DB" "SELECT lead_status FROM contact_submissions WHERE id=${sub_id};")"
+check "POST lead status"            200 \
+	"$(status -u "$USER:$PASS" -b "$JAR" -c "$JAR" -X POST \
+		-H "X-CSRF-Token: ${token}" \
+		"${BASE}/admin/submissions/${sub_id}/status" -d 'status=confirmed')"
+check "lead status persisted"       confirmed \
+	"$(sq "$DB" "SELECT lead_status FROM contact_submissions WHERE id=${sub_id};")"
+check "POST bogus lead rejected"    422 \
+	"$(status -u "$USER:$PASS" -b "$JAR" -c "$JAR" -X POST \
+		-H "X-CSRF-Token: ${token}" \
+		"${BASE}/admin/submissions/${sub_id}/status" -d 'status=bogus')"
+check "DELETE submission"           200 \
+	"$(status -u "$USER:$PASS" -b "$JAR" -c "$JAR" -X DELETE \
+		-H "X-CSRF-Token: ${token}" \
+		"${BASE}/admin/submissions/${sub_id}")"
+check "submission deleted"          0 "$(sq "$DB" 'SELECT COUNT(*) FROM contact_submissions;')"
+check "DELETE missing -> 404"       404 \
+	"$(status -u "$USER:$PASS" -b "$JAR" -c "$JAR" -X DELETE \
+		-H "X-CSRF-Token: ${token}" \
+		"${BASE}/admin/submissions/${sub_id}")"
 
 echo
 echo "=== body limit (seam 4) ==="

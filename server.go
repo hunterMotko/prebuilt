@@ -265,6 +265,8 @@ func newServer(cfg Config) (*echo.Echo, error) {
 	admin := e.Group(adminPrefix, adminRateLimit, adminAuth, middleware.BodyLimit("40M"), adminCSRF)
 	admin.GET("", handlers.AdminList)
 	admin.GET("/submissions", handlers.AdminSubmissions)
+	admin.POST("/submissions/:id/status", handlers.AdminUpdateSubmissionLeadStatus)
+	admin.DELETE("/submissions/:id", handlers.AdminDeleteSubmission)
 	admin.GET("/inventory/new", handlers.AdminNewItemForm)
 	admin.POST("/inventory", handlers.AdminCreateItem)
 	admin.GET("/inventory/:id/edit", handlers.AdminEditItemForm)

@@ -60,7 +60,7 @@ jobs:
       # the Dockerfile stayed on the old builder image. Invisible locally.
       - run: make check-docker-go
 
-      # 43 end-to-end checks against a real running binary — routing, auth, CSRF
+      # 50 end-to-end checks against a real running binary — routing, auth, CSRF
       # via both token sources, security headers, body limits, rate limiting,
       # spam defences. Throwaway database, SMTP forced empty.
       - run: make smoke

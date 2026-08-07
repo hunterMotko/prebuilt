@@ -161,6 +161,18 @@ const (
 	EmailSkipped = "skipped" // SMTP not configured, so no attempt was made
 )
 
+// Lead triage states, set by the admin — independent of the automatic email
+// delivery states above. "Confirmed" means the sale happened and the row is
+// safe to delete; it exists so the owner's inbox never accidentally becomes
+// the second source of truth for which leads closed.
+const (
+	LeadNew        = "new"        // untouched since it arrived
+	LeadConfirmed  = "confirmed"  // sale done — safe to delete
+	LeadNotSold    = "not_sold"   // followed up, didn't buy
+	LeadBadEmail   = "bad_email"  // their email looks wrong; phone may still work
+	LeadSuspicious = "suspicious" // likely spam
+)
+
 func createTables() {
 	query := `
 	CREATE TABLE IF NOT EXISTS contact_submissions (
@@ -174,7 +186,8 @@ func createTables() {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		email_status TEXT NOT NULL DEFAULT 'pending',
 		email_error TEXT NOT NULL DEFAULT '',
-		email_attempted_at DATETIME
+		email_attempted_at DATETIME,
+		lead_status TEXT NOT NULL DEFAULT 'new'
 	);`
 
 	if _, err := DB.Exec(query); err != nil {
@@ -182,6 +195,7 @@ func createTables() {
 	}
 
 	migrateEmailDeliveryColumns()
+	migrateLeadStatusColumn()
 }
 
 // migrateEmailDeliveryColumns adds delivery tracking to databases created
@@ -213,6 +227,24 @@ func migrateEmailDeliveryColumns() {
 	}
 }
 
+// migrateLeadStatusColumn adds admin triage to databases created before it
+// existed. Rows that predate it get 'new' from the column default — every old
+// lead genuinely is untriaged.
+func migrateLeadStatusColumn() {
+	exists, err := columnExists("contact_submissions", "lead_status")
+	if err != nil {
+		log.Fatal("failed to inspect contact_submissions schema:", err)
+	}
+	if exists {
+		return
+	}
+	if _, err := DB.Exec(
+		`ALTER TABLE contact_submissions ADD COLUMN lead_status TEXT NOT NULL DEFAULT 'new'`,
+	); err != nil {
+		log.Fatalf("failed to add lead_status column: %v", err)
+	}
+}
+
 // ContactSubmission is one lead captured from a public form.
 //
 // The EmailStatus fields track delivery separately from capture: the row is
@@ -231,6 +263,8 @@ type ContactSubmission struct {
 	EmailStatus      string
 	EmailError       string
 	EmailAttemptedAt sql.NullTime
+
+	LeadStatus string
 }
 
 // SaveContactSubmission stores a lead and returns its new id. The EmailStatus
@@ -263,7 +297,7 @@ func MarkEmailStatus(id int64, status, errMsg string) error {
 
 const submissionSelect = `
 	SELECT id, name, phone, email, style, size, details, created_at,
-	       email_status, email_error, email_attempted_at
+	       email_status, email_error, email_attempted_at, lead_status
 	FROM contact_submissions`
 
 // ListContactSubmissions returns the most recent submissions, newest first.
@@ -279,13 +313,52 @@ func ListContactSubmissions(limit int) ([]ContactSubmission, error) {
 		var s ContactSubmission
 		if err := rows.Scan(
 			&s.ID, &s.Name, &s.Phone, &s.Email, &s.Style, &s.Size, &s.Details, &s.CreatedAt,
-			&s.EmailStatus, &s.EmailError, &s.EmailAttemptedAt,
+			&s.EmailStatus, &s.EmailError, &s.EmailAttemptedAt, &s.LeadStatus,
 		); err != nil {
 			return nil, err
 		}
 		subs = append(subs, s)
 	}
 	return subs, rows.Err()
+}
+
+// GetContactSubmission returns one submission by id; sql.ErrNoRows if absent.
+func GetContactSubmission(id int64) (ContactSubmission, error) {
+	var s ContactSubmission
+	err := DB.QueryRow(submissionSelect+` WHERE id = ?`, id).Scan(
+		&s.ID, &s.Name, &s.Phone, &s.Email, &s.Style, &s.Size, &s.Details, &s.CreatedAt,
+		&s.EmailStatus, &s.EmailError, &s.EmailAttemptedAt, &s.LeadStatus,
+	)
+	return s, err
+}
+
+// UpdateSubmissionLeadStatus returns sql.ErrNoRows if no submission has that
+// id, so callers can distinguish "doesn't exist" from a real database failure.
+func UpdateSubmissionLeadStatus(id int64, status string) error {
+	res, err := DB.Exec(
+		`UPDATE contact_submissions SET lead_status = ? WHERE id = ?`, status, id,
+	)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// DeleteContactSubmission removes the row. Returns sql.ErrNoRows if no
+// submission has that id — deleting a lead is destructive enough that a stale
+// button should surface as "not found" rather than silently succeed.
+func DeleteContactSubmission(id int64) error {
+	res, err := DB.Exec(`DELETE FROM contact_submissions WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 // CountUndeliveredSubmissions counts submissions whose notification email was

@@ -6,10 +6,9 @@
 // machinery for what turned out to be two duplicated listeners. Moving them
 // here lets the policy stay a plain `script-src 'self'`.
 //
-// Loaded by admin/list.html and admin/edit.html (the two htmx-driven pages).
-// admin/new.html and admin/submissions.html don't need it: new.html is a plain
-// multipart POST carrying its token in a form field, and submissions.html is
-// read-only.
+// Loaded by admin/list.html, admin/edit.html, and admin/submissions.html (the
+// htmx-driven pages). admin/new.html doesn't need it: it's a plain multipart
+// POST carrying its token in a form field.
 
 // htmx sends the CSRF token as a header. The plain form POSTs send it as a
 // `csrf` field instead; main.go's TokenLookup accepts either.

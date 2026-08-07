@@ -1,0 +1,41 @@
+{{define "admin_submission_row.html"}}
+<tr id="submission-{{.ID}}" class="{{if .Warning}}admin-row--warn{{end}}">
+    <td class="nowrap">{{.CreatedAt.Format "Jan 2, 2006 3:04 PM"}}</td>
+    <td>{{.Name}}</td>
+    <td class="nowrap"><a href="tel:{{.Phone}}">{{.Phone}}</a></td>
+    <td><a href="mailto:{{.Email}}">{{.Email}}</a></td>
+    <td>{{.Style}} {{.Size}}</td>
+    <td class="admin-details">{{.Details}}</td>
+    <td>
+        <span class="delivery delivery--{{.StatusClass}}">{{.StatusLabel}}</span>
+        {{if .EmailError}}
+        <!-- The raw SMTP error, shown so the cause is visible
+             without shelling into the server for logs. -->
+        <div class="delivery-error">{{.EmailError}}</div>
+        {{end}}
+    </td>
+    <td>
+        <form hx-post="{{adminPath}}/submissions/{{.ID}}/status" hx-target="closest tr" hx-swap="outerHTML">
+            <!-- data-autosubmit replaces an inline onchange handler, which the
+                 CSP blocks. The listener lives in public/js/admin.js. -->
+            <select name="status" data-autosubmit>
+                <option value="new" {{if eq .LeadStatus "new"}}selected{{end}}>New</option>
+                <option value="confirmed" {{if eq .LeadStatus "confirmed"}}selected{{end}}>Confirmed</option>
+                <option value="not_sold" {{if eq .LeadStatus "not_sold"}}selected{{end}}>Not Sold</option>
+                <option value="bad_email" {{if eq .LeadStatus "bad_email"}}selected{{end}}>Bad Email</option>
+                <option value="suspicious" {{if eq .LeadStatus "suspicious"}}selected{{end}}>Suspicious</option>
+            </select>
+        </form>
+    </td>
+    <td class="admin-row-actions">
+        <button
+            type="button"
+            class="btn btn-outline btn-sm"
+            hx-delete="{{adminPath}}/submissions/{{.ID}}"
+            hx-target="closest tr"
+            hx-swap="outerHTML"
+            hx-confirm="Delete this submission permanently? This cannot be undone."
+        >Delete</button>
+    </td>
+</tr>
+{{end}}

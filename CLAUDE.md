@@ -69,7 +69,7 @@ locally passes there.
 make            # list targets
 make run        # dev server (default :8080)
 make test       # unit tests
-make smoke      # 43 end-to-end checks against a real binary, throwaway DB
+make smoke      # 50 end-to-end checks against a real binary, throwaway DB
 make ci         # everything CI runs
 ```
 
