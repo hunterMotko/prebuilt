@@ -50,22 +50,12 @@
 
         <div class="form-row">
             <div class="form-group">
-                <label for="siding_code">Siding Color <span class="req">*</span></label>
-                <select id="siding_code" name="siding_code" required>
-                    {{range .SidingColors}}<option value="{{.Code}}">{{.Code}} &mdash; {{.Name}}</option>{{end}}
-                </select>
-                <div class="color-legend">
-                    {{range .SidingColors}}<span class="color-swatch" style="background:{{.Hex}}" title="{{.Code}} — {{.Name}}"></span>{{end}}
-                </div>
+                <label for="siding_code">Siding Color Code <span class="req">*</span></label>
+                <input type="text" id="siding_code" name="siding_code" maxlength="20" placeholder="e.g. 23" required>
             </div>
             <div class="form-group">
-                <label for="roof_code">Roof Color <span class="req">*</span></label>
-                <select id="roof_code" name="roof_code" required>
-                    {{range .RoofColors}}<option value="{{.Code}}">{{.Code}} &mdash; {{.Name}}</option>{{end}}
-                </select>
-                <div class="color-legend">
-                    {{range .RoofColors}}<span class="color-swatch" style="background:{{.Hex}}" title="{{.Code}} — {{.Name}}"></span>{{end}}
-                </div>
+                <label for="roof_code">Roof Color Code <span class="req">*</span></label>
+                <input type="text" id="roof_code" name="roof_code" maxlength="20" placeholder="e.g. 45" required>
             </div>
         </div>
 

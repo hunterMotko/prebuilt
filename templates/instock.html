@@ -27,6 +27,9 @@
 
     <link rel="icon" type="image/png" href="/public/images/pbs-logo.png">
     <link rel="stylesheet" href="/public/css/style.css">
+    <!-- htmx otherwise injects an inline <style> for .htmx-indicator, which
+         style-src 'self' blocks; the spinner rules live in style.css instead. -->
+    <meta name="htmx-config" content='{"includeIndicatorStyles":false}'>
     <script src="/public/js/htmx.min.js" defer></script>
     <script src="/public/js/main.js" defer></script>
 </head>
@@ -186,10 +189,6 @@
     <div class="instock-card-body">
         <h3 class="instock-title">{{.Width}}&times;{{.Length}} {{.Style}}</h3>
         <p class="instock-lot">Lot {{.Lot}}</p>
-        <div class="instock-colors">
-            <span class="color-swatch" style="background:{{.SidingHex}}" title="Siding: {{.SidingName}}"></span>
-            <span class="color-swatch" style="background:{{.RoofHex}}" title="Roof: {{.RoofName}}"></span>
-        </div>
         {{if .PriceDisplay}}
         <p class="instock-price">{{.PriceDisplay}}</p>
         {{else}}

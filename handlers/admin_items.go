@@ -15,6 +15,10 @@ import (
 	"github.com/hunterMotko/prebuilt/database"
 )
 
+// colorCodeMax caps the free-text siding/roof codes. They feed GenerateCode
+// and from there the interest email, so an unbounded value has reach.
+const colorCodeMax = 20
+
 // adminPath is the URL prefix the admin group is mounted at. Handlers are plain
 // functions with no access to Config, so post-action redirects read it from
 // here. The default matches config.go's.
@@ -48,23 +52,11 @@ func AdminList(c echo.Context) error {
 	})
 }
 
-// AdminNewItemForm renders the create form, pre-loading the color reference
-// tables so siding and roof codes can be picked from a swatch rather than typed.
+// AdminNewItemForm renders the create form.
 func AdminNewItemForm(c echo.Context) error {
-	siding, err := database.ListSidingColors()
-	if err != nil {
-		c.Logger().Error("list siding colors failed:", err)
-	}
-	roof, err := database.ListRoofColors()
-	if err != nil {
-		c.Logger().Error("list roof colors failed:", err)
-	}
-
 	return c.Render(http.StatusOK, "admin_new.html", map[string]any{
-		"Title":        "New Item — Admin",
-		"SidingColors": siding,
-		"RoofColors":   roof,
-		"CSRFToken":    csrfToken(c),
+		"Title":     "New Item — Admin",
+		"CSRFToken": csrfToken(c),
 	})
 }
 
@@ -84,6 +76,11 @@ func parseInventoryForm(c echo.Context) (database.InventoryItem, error) {
 	}
 	if width <= 0 || length <= 0 {
 		return database.InventoryItem{}, errors.New("Width and length must be greater than zero.")
+	}
+	// Codes are free text; they feed GenerateCode and from there the interest
+	// email, so cap them at something no supplier code will ever exceed.
+	if len(sidingCode) > colorCodeMax || len(roofCode) > colorCodeMax {
+		return database.InventoryItem{}, errors.New("Color codes must be 20 characters or fewer.")
 	}
 	// The forms only offer valid values for these, but validating here too
 	// turns a crafted request into a clean 422 instead of letting it hit the
@@ -176,15 +173,6 @@ func AdminEditItemForm(c echo.Context) error {
 		return c.HTML(http.StatusNotFound, errorHTML("Item not found."))
 	}
 
-	siding, err := database.ListSidingColors()
-	if err != nil {
-		c.Logger().Error("list siding colors failed:", err)
-	}
-	roof, err := database.ListRoofColors()
-	if err != nil {
-		c.Logger().Error("list roof colors failed:", err)
-	}
-
 	priceDollars := ""
 	if item.PriceCents > 0 {
 		priceDollars = fmt.Sprintf("%.2f", float64(item.PriceCents)/100)
@@ -194,8 +182,6 @@ func AdminEditItemForm(c echo.Context) error {
 		"Title":        "Edit Item — Admin",
 		"Item":         item,
 		"PriceDollars": priceDollars,
-		"SidingColors": siding,
-		"RoofColors":   roof,
 		"CSRFToken":    csrfToken(c),
 	})
 }

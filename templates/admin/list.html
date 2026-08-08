@@ -8,6 +8,9 @@
     <link rel="icon" type="image/png" href="/public/images/pbs-logo.png">
     <link rel="stylesheet" href="/public/css/style.css">
     <meta name="csrf-token" content="{{.CSRFToken}}">
+    <!-- htmx otherwise injects an inline <style> for .htmx-indicator, which
+         style-src 'self' blocks; the spinner rules live in style.css instead. -->
+    <meta name="htmx-config" content='{"includeIndicatorStyles":false}'>
     <script src="/public/js/htmx.min.js" defer></script>
     <script src="/public/js/admin.js" defer></script>
 </head>

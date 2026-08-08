@@ -8,6 +8,9 @@
     <link rel="icon" type="image/png" href="/public/images/pbs-logo.png">
     <link rel="stylesheet" href="/public/css/style.css">
     <meta name="csrf-token" content="{{.CSRFToken}}">
+    <!-- htmx otherwise injects an inline <style> for .htmx-indicator, which
+         style-src 'self' blocks; the spinner rules live in style.css instead. -->
+    <meta name="htmx-config" content='{"includeIndicatorStyles":false}'>
     <script src="/public/js/htmx.min.js" defer></script>
     <script src="/public/js/admin.js" defer></script>
 </head>
@@ -65,22 +68,12 @@
 
         <div class="form-row">
             <div class="form-group">
-                <label for="siding_code">Siding Color <span class="req">*</span></label>
-                <select id="siding_code" name="siding_code" required>
-                    {{range .SidingColors}}<option value="{{.Code}}" {{if eq .Code $.Item.SidingCode}}selected{{end}}>{{.Code}} &mdash; {{.Name}}</option>{{end}}
-                </select>
-                <div class="color-legend">
-                    {{range .SidingColors}}<span class="color-swatch" style="background:{{.Hex}}" title="{{.Code}} — {{.Name}}"></span>{{end}}
-                </div>
+                <label for="siding_code">Siding Color Code <span class="req">*</span></label>
+                <input type="text" id="siding_code" name="siding_code" maxlength="20" value="{{.Item.SidingCode}}" required>
             </div>
             <div class="form-group">
-                <label for="roof_code">Roof Color <span class="req">*</span></label>
-                <select id="roof_code" name="roof_code" required>
-                    {{range .RoofColors}}<option value="{{.Code}}" {{if eq .Code $.Item.RoofCode}}selected{{end}}>{{.Code}} &mdash; {{.Name}}</option>{{end}}
-                </select>
-                <div class="color-legend">
-                    {{range .RoofColors}}<span class="color-swatch" style="background:{{.Hex}}" title="{{.Code}} — {{.Name}}"></span>{{end}}
-                </div>
+                <label for="roof_code">Roof Color Code <span class="req">*</span></label>
+                <input type="text" id="roof_code" name="roof_code" maxlength="20" value="{{.Item.RoofCode}}" required>
             </div>
         </div>
 
