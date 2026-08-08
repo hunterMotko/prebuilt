@@ -245,7 +245,14 @@ func newServer(cfg Config) (*echo.Echo, error) {
 	// the legitimate admin. 20 through, then one every two seconds: ample for
 	// clicking through inventory, and a guessing loop drops to 30/minute. Against
 	// a 32-char password that's already hopeless, so the real wins are log noise
-	// and off-the-shelf credential stuffing. fail2ban also bans the host.
+	// and off-the-shelf credential stuffing.
+	//
+	// This is deliberately a self-healing THROTTLE and not a ban, and it is the
+	// only attempt-limiting layer by choice: the panel is operated by a
+	// non-technical admin who must never be able to lock himself out by
+	// fumbling a password. A throttle recovers on its own in seconds and
+	// explains itself through the custom 429 page; a fail2ban-style firewall
+	// ban does neither, and would take SSH with it. See docs/DECISIONS.md D-1.
 	adminRateLimit := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
 		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
 			Rate:      rate.Limit(0.5),

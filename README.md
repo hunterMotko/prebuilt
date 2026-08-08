@@ -198,10 +198,16 @@ built and feature-flagged off pending real inventory data.
 
 The protected routes use HTTP Basic Auth. Session auth was specified and then
 deliberately not built: over HTTPS, with a long password, per-IP rate limiting,
-CSRF, and fail2ban, the only thing it adds for a single operator is a logout
-button. Revisit if a second person ever needs access.
+and CSRF, the only thing it adds for a single operator is a logout button.
+Revisit if a second person ever needs access.
 
-Nightly backups are scripted — a consistent `sqlite3 .backup`, an incremental
-photo mirror, and pruning. The off-box copy is not yet enabled, so every backup
-currently sits on the same disk as the data it protects. That is the largest
-remaining operational gap.
+Attempt limiting is a self-healing throttle rather than a ban, deliberately.
+The panel is operated by a non-technical admin, and a mistyped password must
+never be able to lock him out of the site — or, with a firewall-level jail, out
+of SSH along with it.
+
+Backups are scripted as two halves that fail independently: the box produces
+consistent `sqlite3 .backup` snapshots on a schedule and keeps a retention
+window, and the operator pulls them off-box from their own machine. The
+privileged half stays where the privilege already is; the transfer half needs
+none.
