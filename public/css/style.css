@@ -1495,6 +1495,55 @@ button {
 	line-height: 1.6;
 }
 
+/* Sits directly under the pricing tabs. Deliberately quiet — the tables are
+   the section, and the flyer is the same information in a form you can carry. */
+.pricing-flyer {
+	margin: -1rem 0 1.5rem;
+	font-size: .9rem;
+}
+
+.pricing-flyer a {
+	color: var(--text-muted);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
+.pricing-flyer a:hover,
+.pricing-flyer a:focus-visible {
+	color: var(--red);
+}
+
+/* ─── FLYER PAGE ──────────────────────────────────────────────────────────── */
+/* Same top clearance as /instock: the fixed nav would otherwise cover the
+   section header. */
+.flyer-section { background: var(--black-2); padding-top: calc(var(--nav-h) + 3rem); }
+
+/* Capped near the width of a printed page on screen. Wider only makes a phone
+   user scroll further and a desktop user read text across a whole monitor. */
+.flyer-pages {
+	display: grid;
+	gap: 1.5rem;
+	max-width: 900px;
+	margin: 0 auto;
+}
+
+.flyer-page {
+	display: block;
+	width: 100%;
+	height: auto;
+	background: #fff;
+	border-radius: var(--radius-sm);
+	box-shadow: 0 8px 30px rgba(0, 0, 0, .45);
+}
+
+.flyer-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 1rem;
+	margin-top: 2.5rem;
+}
+
 .pricing-table-wrap {
 	overflow-x: auto;
 }

@@ -113,7 +113,7 @@ go run .                      # :8080
 ```bash
 make            # list targets
 make test       # unit tests
-make smoke      # 43 end-to-end checks against a real binary
+make smoke      # 55 end-to-end checks against a real binary
 make ci         # everything CI runs, ~13s
 ```
 

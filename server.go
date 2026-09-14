@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -203,6 +205,24 @@ func newServer(cfg Config) (*echo.Echo, error) {
 	// outage. Echo/net-http handles the empty-body part of HEAD itself.
 	e.Match([]string{http.MethodGet, http.MethodHead}, "/", handlers.Home)
 	e.POST("/contact", handlers.Contact, publicBodyLimit, formRateLimit)
+
+	// /flyer is what the QR codes on the printed flyer point at, so a broken
+	// page is found by a customer standing in the shop, with nothing on screen
+	// to say what went wrong. The template is already checked by ParseGlob
+	// above; the page images are what can silently go missing, hence this.
+	//
+	// Logged loudly rather than returned as an error: the flyer must never be
+	// able to take the homepage and the lead form down with it. What actually
+	// stops a broken image reaching production is `make docker-smoke`, which
+	// fetches a page image from the built image.
+	for _, p := range handlers.FlyerPages {
+		if _, err := os.Stat(strings.TrimPrefix(p.Src, "/")); err != nil {
+			log.Printf("ERROR: flyer image missing at %s (%v) — /flyer will show a broken image", p.Src, err)
+		}
+	}
+	// HEAD alongside GET, like "/": uptime monitors and link checkers commonly
+	// probe with HEAD, and a GET-only route answers 405.
+	e.Match([]string{http.MethodGet, http.MethodHead}, "/flyer", handlers.Flyer)
 
 	// Not registered when the flag is off, so /instock is a plain 404. Hiding
 	// only the nav link would leave the page and its interest form publicly live
