@@ -58,8 +58,8 @@ type requestLogEntry struct {
 // Deliberately not logged:
 //   - Any 2xx or 3xx. nginx has them, and they are the overwhelming majority.
 //   - 404. nginx has these too, and unmatched-route noise from bot scanners is
-//     the bulk of it. Scanning is better handled where the data already lives,
-//     since fail2ban reads nginx's access log directly.
+//     the bulk of it. Recording it twice would not make it more actionable;
+//     nginx's access log is where that data already lives if it is ever needed.
 //   - Request bodies and form values. They hold customer names, phone numbers,
 //     and email addresses, which do not belong in a log file that no retention
 //     policy covers.

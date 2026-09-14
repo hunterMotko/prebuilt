@@ -17,6 +17,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/hunterMotko/prebuilt/database"
+	"github.com/hunterMotko/prebuilt/handlers"
 )
 
 // These tests exercise the instance newServer actually builds, not a
@@ -96,6 +97,8 @@ func TestPublicRoutes(t *testing.T) {
 		{http.MethodHead, "/", http.StatusOK},
 		{http.MethodGet, "/robots.txt", http.StatusOK},
 		{http.MethodGet, "/sitemap.xml", http.StatusOK},
+		{http.MethodGet, "/flyer", http.StatusOK},
+		{http.MethodHead, "/flyer", http.StatusOK},
 		{http.MethodGet, "/nonexistent-page", http.StatusNotFound},
 	} {
 		rec := do(t, e, httptest.NewRequest(tc.method, tc.path, nil))
@@ -127,6 +130,53 @@ func TestStaticAssetsAreNotShadowed(t *testing.T) {
 		if got := rec.Header().Get("Cache-Control"); got != "no-cache" {
 			t.Errorf("GET %s Cache-Control = %q, want %q", path, got, "no-cache")
 		}
+	}
+}
+
+// /flyer is the one URL on this site printed onto physical objects, so a
+// regression is fixed by a reprint rather than a deploy. It must be a real site
+// page — nav, every flyer page image, footer — and every image it references
+// must actually be served, since a 200 page full of broken images passes a
+// status check.
+func TestFlyerPage(t *testing.T) {
+	e := newTestServer(t, testConfig())
+
+	rec := get(t, e, "/flyer")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /flyer = %d, want 200", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/html") {
+		t.Errorf("Content-Type = %q, want text/html", got)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{`id="nav"`, `class="footer"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("/flyer is missing %s — not wrapped in the site shell", want)
+		}
+	}
+
+	if len(handlers.FlyerPages) == 0 {
+		t.Fatal("handlers.FlyerPages is empty")
+	}
+	for _, p := range handlers.FlyerPages {
+		if !strings.Contains(body, `src="`+p.Src+`"`) {
+			t.Errorf("/flyer does not render %s", p.Src)
+		}
+		if img := get(t, e, p.Src); img.Code != http.StatusOK {
+			t.Errorf("GET %s = %d, want 200 (re-run scripts/render-flyer.sh?)", p.Src, img.Code)
+		}
+	}
+}
+
+// The flyer link is the only route to the PDF for anyone who did not scan a
+// printed code. Losing it during a pricing edit would be invisible.
+func TestPricingLinksToFlyer(t *testing.T) {
+	e := newTestServer(t, testConfig())
+
+	body := get(t, e, "/").Body.String()
+	if !strings.Contains(body, `href="/flyer"`) {
+		t.Error(`homepage has no href="/flyer" — the pricing section's flyer link is gone`)
 	}
 }
 

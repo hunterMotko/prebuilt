@@ -125,6 +125,17 @@ check "GET /instock"                200 "$(status "${BASE}/instock")"
 check "GET /robots.txt"             200 "$(status "${BASE}/robots.txt")"
 check "GET /sitemap.xml"            200 "$(status "${BASE}/sitemap.xml")"
 
+# /flyer is the only URL on this site printed onto physical QR codes, so a
+# regression here is fixed by a reprint, not a deploy. The page images are
+# checked separately because a 200 page full of broken images passes a status
+# check.
+check "GET /flyer"                  200 "$(status "${BASE}/flyer")"
+check "HEAD /flyer"                 200 "$(status -I "${BASE}/flyer")"
+flyer_ct="$(curl -s -o /dev/null -w '%{content_type}' "${BASE}/flyer" | cut -d';' -f1)"
+check "flyer content-type"          "text/html" "$flyer_ct"
+check "GET flyer-page-1.webp"       200 "$(status "${BASE}/public/images/flyer-page-1.webp")"
+check "GET flyer-page-2.webp"       200 "$(status "${BASE}/public/images/flyer-page-2.webp")"
+
 # Seam 3: attaching middleware to a group makes Echo auto-register a catch-all
 # RouteNotFound for that prefix, which once shadowed the static route and 404'd
 # every asset on the site.

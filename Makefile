@@ -116,6 +116,8 @@ docker-smoke: docker-build ## Build, run, verify, tear down
 	chk /public/js/main.js 200; \
 	chk /public/js/admin.js 200; \
 	chk /robots.txt 200; \
+	chk /flyer 200; \
+	chk /public/images/flyer-page-1.webp 200; \
 	chk /admin 401; \
 	chk /admin 200 "-u ci:ci-smoke-pass"; \
 	uid="$$(docker exec $$name id -u)"; \

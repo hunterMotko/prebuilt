@@ -69,7 +69,7 @@ locally passes there.
 make            # list targets
 make run        # dev server (default :8080)
 make test       # unit tests
-make smoke      # 50 end-to-end checks against a real binary, throwaway DB
+make smoke      # 55 end-to-end checks against a real binary, throwaway DB
 make ci         # everything CI runs
 ```
 
@@ -88,7 +88,7 @@ The server is a single process with no hot-reload. When editing templates or CSS
 
 **Request flow:**
 
-1. `handlers/` — one file per route group, HTTP concerns only: `home.go`, `contact.go`, `instock.go`, `seo.go` (generated `robots.txt`/`sitemap.xml`), `spam.go` (honeypot + timestamp checks), `errors.go` (the one escaping helper), and the admin trio `admin_items.go`, `admin_photos.go`, `admin_submissions.go`
+1. `handlers/` — one file per route group, HTTP concerns only: `home.go`, `contact.go`, `instock.go`, `flyer.go` (the `/flyer` page), `seo.go` (generated `robots.txt`/`sitemap.xml`), `spam.go` (honeypot + timestamp checks), `errors.go` (the one escaping helper), and the admin trio `admin_items.go`, `admin_photos.go`, `admin_submissions.go`
 2. `database/` — schema, migrations, queries; no HTTP awareness. `db.go` opens SQLite, enables WAL, pins the pool to one connection, and creates `contact_submissions`. `inventory.go` owns the inventory tables plus `GenerateCode` (the `{lot}-{styleLetter}-{width}{length}-{sidingCode}{roofCode}` display code, e.g. `1-G-1224-2345` — not unique, the DB id is the real key) and `Describe` (`Lot 1 · 12×24 Gable · Siding 23 · Roof 45`). Siding/roof codes are opaque free-text strings; there is no color reference table
 3. `logging.go` — `errorOnlyLogger()`, which logs 4xx/5xx and nothing else. nginx is the system of record for raw traffic
 4. `templates/layout.html` — the homepage shell; calls `nav.html`/`footer.html` partials and `{{template "index.html" .}}`, which delegates each section to a partial. `templates/instock.html` is a second full document reusing the same partials. `templates/admin/*.html` are a third template set with their own minimal shell — three separate `ParseGlob` calls in `server.go`
@@ -100,6 +100,7 @@ The server is a single process with no hot-reload. When editing templates or CSS
 
 - **Images** — drop files into `public/images/` and replace `placeholder-img` divs with `<img src="/public/images/yourfile.jpg">`. Each placeholder has a `<!-- REPLACE: ... -->` comment explaining what shot fits.
 - **Pricing** — edit `templates/partials/pricing.html`; the pricing card structure is self-contained with a comment block at the top.
+- **Flyer** — `/flyer` shows the printed flyer as page images inside the normal site shell (`templates/flyer.html`); the PDF itself is not served. For a new flyer, run `scripts/render-flyer.sh path/to/flyer.pdf`, then update `FlyerPages` in `handlers/flyer.go` with the dimensions it prints. The `/flyer` path is printed on QR codes — never rename it.
 - **Phone / service area** — search for `(555) 000-0000` and `[City, State]` across `templates/` to fill in real contact info.
 
 ## Environment variables
