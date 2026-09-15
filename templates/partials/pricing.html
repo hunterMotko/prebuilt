@@ -3,12 +3,17 @@
     <div class="container">
         <div class="section-header">
             <h2 class="section-title">Transparent <span class="red-text">Pricing</span></h2>
-            <p class="section-subtitle">No haggling. No hidden fees. Every shed price includes delivery and set.</p>
+            <p class="section-subtitle">No haggling. No hidden fees. Free delivery the first 100 miles from Houghton Lake.</p>
         </div>
 
-        <div class="pricing-tabs">
-            <button class="pricing-tab active" data-tab="standard">Standard Barn</button>
-            <button class="pricing-tab" data-tab="deluxe">Deluxe Barn &amp; Gable</button>
+        <!-- Tier switch. The old underline tabs read as headings and visitors
+             never found the Deluxe prices, so this is a filled pill control
+             with a visible prompt. Each tab's aria-controls must name a pane id
+             below; server_test.go checks that. -->
+        <p class="tier-switch-label" id="tierSwitchLabel">Choose a barn type to compare prices</p>
+        <div class="pricing-tabs pricing-tabs--segmented" role="tablist" aria-labelledby="tierSwitchLabel">
+            <button type="button" class="pricing-tab active" role="tab" id="tabbtn-standard" aria-selected="true" aria-controls="tab-standard" data-tab="standard">Standard Barn</button>
+            <button type="button" class="pricing-tab" role="tab" id="tabbtn-deluxe" aria-selected="false" aria-controls="tab-deluxe" tabindex="-1" data-tab="deluxe">Deluxe Barn &amp; Gable</button>
         </div>
 
         <!-- Same flyer the shop hands out, and the target of the QR codes
@@ -19,9 +24,9 @@
         </p>
 
         <!-- STANDARD BARN -->
-        <div class="pricing-pane active" id="tab-standard">
+        <div class="pricing-pane active" id="tab-standard" role="tabpanel" aria-labelledby="tabbtn-standard">
             <p class="pane-desc">
-                10&prime; wall height &bull; 2&times;4 rafters &bull; double swing barn doors with lock &bull; &frac12; loft included &bull; premium steel roof with under-laminate
+                10&prime; wall height (11&prime; on 12&prime; wide) &bull; 2&times;4 rafters &bull; double swing barn doors with lock &bull; &frac12; loft included &bull; premium steel roof with under-laminate
             </p>
             <div class="pricing-table-wrap">
                 <table class="pricing-table">
@@ -29,29 +34,28 @@
                         <tr>
                             <th>Width</th>
                             <th>Length</th>
-                            <th>Wall Ht</th>
                             <th>Price</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr class="group-header"><td colspan="5">10&prime; Wide</td></tr>
-                        <tr><td>10&prime;</td><td>12&prime;</td><td>10&prime;</td><td class="price-cell">$4,689</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>10&prime;</td><td>16&prime;</td><td>10&prime;</td><td class="price-cell">$5,189</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>10&prime;</td><td>20&prime;</td><td>10&prime;</td><td class="price-cell">$5,689</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr class="group-header"><td colspan="4">10&prime; Wide</td></tr>
+                        <tr><td>10&prime;</td><td>12&prime;</td><td class="price-cell">$4,689</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>10&prime;</td><td>16&prime;</td><td class="price-cell">$5,189</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>10&prime;</td><td>20&prime;</td><td class="price-cell">$5,689</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
 
-                        <tr class="group-header"><td colspan="5">12&prime; Wide</td></tr>
-                        <tr><td>12&prime;</td><td>12&prime;</td><td>10&prime;</td><td class="price-cell">$5,589</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>12&prime;</td><td>16&prime;</td><td>10&prime;</td><td class="price-cell">$6,089</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>12&prime;</td><td>20&prime;</td><td>10&prime;</td><td class="price-cell">$6,589</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>12&prime;</td><td>24&prime;</td><td>10&prime;</td><td class="price-cell">$7,089</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr class="group-header"><td colspan="4">12&prime; Wide</td></tr>
+                        <tr><td>12&prime;</td><td>12&prime;</td><td class="price-cell">$5,589</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>12&prime;</td><td>16&prime;</td><td class="price-cell">$6,089</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>12&prime;</td><td>20&prime;</td><td class="price-cell">$6,589</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>12&prime;</td><td>24&prime;</td><td class="price-cell">$7,089</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
         <!-- DELUXE BARN & GABLE -->
-        <div class="pricing-pane" id="tab-deluxe">
+        <div class="pricing-pane" id="tab-deluxe" role="tabpanel" aria-labelledby="tabbtn-deluxe">
             <p class="pane-desc">
                 11&prime; wall height &bull; 2&times;6 rafters &bull; 8&times;7 roll-up door &amp; 36&rdquo; entry door (14&prime;+ wide) &bull; premium steel roof with under-laminate
             </p>
@@ -61,43 +65,42 @@
                         <tr>
                             <th>Width</th>
                             <th>Length</th>
-                            <th>Wall Ht</th>
                             <th>Price</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr class="group-header"><td colspan="5">10&prime; Wide</td></tr>
-                        <tr><td>10&prime;</td><td>12&prime;</td><td>11&prime;</td><td class="price-cell">$5,789</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>10&prime;</td><td>16&prime;</td><td>11&prime;</td><td class="price-cell">$6,389</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>10&prime;</td><td>20&prime;</td><td>11&prime;</td><td class="price-cell">$6,989</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr class="group-header"><td colspan="4">10&prime; Wide</td></tr>
+                        <tr><td>10&prime;</td><td>12&prime;</td><td class="price-cell">$5,789</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>10&prime;</td><td>16&prime;</td><td class="price-cell">$6,389</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>10&prime;</td><td>20&prime;</td><td class="price-cell">$6,989</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
 
-                        <tr class="group-header"><td colspan="5">12&prime; Wide</td></tr>
-                        <tr><td>12&prime;</td><td>12&prime;</td><td>11&prime;</td><td class="price-cell">$5,989</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>12&prime;</td><td>16&prime;</td><td>11&prime;</td><td class="price-cell">$6,389</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>12&prime;</td><td>20&prime;</td><td>11&prime;</td><td class="price-cell">$7,189</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>12&prime;</td><td>24&prime;</td><td>11&prime;</td><td class="price-cell">$7,789</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>12&prime;</td><td>26&prime;</td><td>11&prime;</td><td class="price-cell">$8,389</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>12&prime;</td><td>32&prime;</td><td>11&prime;</td><td class="price-cell">$8,989</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr class="group-header"><td colspan="4">12&prime; Wide</td></tr>
+                        <tr><td>12&prime;</td><td>12&prime;</td><td class="price-cell">$5,989</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>12&prime;</td><td>16&prime;</td><td class="price-cell">$6,589</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>12&prime;</td><td>20&prime;</td><td class="price-cell">$7,189</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>12&prime;</td><td>24&prime;</td><td class="price-cell">$7,789</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>12&prime;</td><td>28&prime;</td><td class="price-cell">$8,389</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>12&prime;</td><td>32&prime;</td><td class="price-cell">$8,989</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
 
-                        <tr class="group-header"><td colspan="5">14&prime; Wide</td></tr>
-                        <tr><td>14&prime;</td><td>20&prime;</td><td>11&prime;</td><td class="price-cell">$11,189</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>14&prime;</td><td>24&prime;</td><td>11&prime;</td><td class="price-cell">$11,789</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>14&prime;</td><td>28&prime;</td><td>11&prime;</td><td class="price-cell">$12,389</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>14&prime;</td><td>32&prime;</td><td>11&prime;</td><td class="price-cell">$12,989</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>14&prime;</td><td>36&prime;</td><td>11&prime;</td><td class="price-cell">$13,589</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr class="group-header"><td colspan="4">14&prime; Wide</td></tr>
+                        <tr><td>14&prime;</td><td>20&prime;</td><td class="price-cell">$11,189</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>14&prime;</td><td>24&prime;</td><td class="price-cell">$11,789</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>14&prime;</td><td>28&prime;</td><td class="price-cell">$12,389</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>14&prime;</td><td>32&prime;</td><td class="price-cell">$12,989</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>14&prime;</td><td>36&prime;</td><td class="price-cell">$13,589</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
 
-                        <tr class="group-header"><td colspan="5">16&prime; Wide</td></tr>
-                        <tr><td>16&prime;</td><td>24&prime;</td><td>11&prime;</td><td class="price-cell">$12,189</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>16&prime;</td><td>28&prime;</td><td>11&prime;</td><td class="price-cell">$12,789</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>16&prime;</td><td>32&prime;</td><td>11&prime;</td><td class="price-cell">$13,389</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
-                        <tr><td>16&prime;</td><td>36&prime;</td><td>11&prime;</td><td class="price-cell">$13,989</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr class="group-header"><td colspan="4">16&prime; Wide</td></tr>
+                        <tr><td>16&prime;</td><td>24&prime;</td><td class="price-cell">$12,189</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>16&prime;</td><td>28&prime;</td><td class="price-cell">$12,789</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>16&prime;</td><td>32&prime;</td><td class="price-cell">$13,389</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
+                        <tr><td>16&prime;</td><td>36&prime;</td><td class="price-cell">$13,989</td><td><a href="#contact" class="btn btn-outline btn-sm">Quote</a></td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <p class="pricing-disclaimer">All shed prices include delivery and set within our service area. Site prep (gravel pad or concrete) is required and priced separately &mdash; do it yourself or have us install a gravel pad. Add-ons priced separately. Contact us for sizes not listed.</p>
+        <p class="pricing-disclaimer">Free delivery the first 100 miles from Houghton Lake, and &ldquo;Mule&rdquo; delivery for those hard-to-get-to locations. Prices are subject to 6% sales tax and subject to change. Site prep (gravel pad or concrete) is required and priced separately &mdash; do it yourself or have us install a gravel pad. Add-ons priced separately. Contact us for sizes not listed.</p>
     </div>
 </section>
 {{end}}

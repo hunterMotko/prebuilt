@@ -209,13 +209,36 @@ if (interestModal) {
 	});
 }
 
-// Pricing tab switcher
-document.querySelectorAll('.pricing-tab').forEach(tab => {
-	tab.addEventListener('click', () => {
-		document.querySelectorAll('.pricing-tab').forEach(t => t.classList.remove('active'));
-		document.querySelectorAll('.pricing-pane').forEach(p => p.classList.remove('active'));
-		tab.classList.add('active');
-		document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+// Tab switcher — Pricing's tier switch and /instock's status tabs. Each tab
+// group switches only its own panes. A group marked role="tablist" also keeps
+// aria-selected and a roving tabindex in step, and takes the arrow keys, which
+// is what screen-reader users expect from something announced as tabs.
+document.querySelectorAll('.pricing-tabs').forEach(list => {
+	const tabs = [...list.querySelectorAll('.pricing-tab')];
+	const aria = list.getAttribute('role') === 'tablist';
+
+	const select = (tab, focus) => {
+		tabs.forEach(t => {
+			const on = t === tab;
+			t.classList.toggle('active', on);
+			document.getElementById('tab-' + t.dataset.tab)?.classList.toggle('active', on);
+			if (aria) {
+				t.setAttribute('aria-selected', on);
+				t.tabIndex = on ? 0 : -1;
+			}
+		});
+		if (focus) tab.focus();
+	};
+
+	tabs.forEach((tab, i) => {
+		tab.addEventListener('click', () => select(tab, false));
+		if (!aria) return;
+		tab.addEventListener('keydown', e => {
+			const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+			if (!step) return;
+			e.preventDefault();
+			select(tabs[(i + step + tabs.length) % tabs.length], true);
+		});
 	});
 });
 
