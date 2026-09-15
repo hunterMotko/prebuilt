@@ -302,8 +302,15 @@ button {
 .nav-toggle {
 	display: none;
 	flex-direction: column;
+	align-items: center;
+	justify-content: center;
 	gap: 5px;
-	padding: 4px;
+	/* 44px is the touch-target minimum; the 24px icon inside stays the same
+	   size. It was 32x24 and easy to miss, or to land on the Call button. */
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	cursor: pointer;
 }
 
 .nav-toggle span {
@@ -1340,6 +1347,19 @@ button {
 	color: var(--red);
 }
 
+/* The icon is decorative (alt=""): the visible word is the link's name. */
+.footer-social {
+	display: inline-flex;
+	align-items: center;
+	gap: .4rem;
+}
+
+.footer-social-icon {
+	width: 18px;
+	height: 18px;
+	object-fit: contain;
+}
+
 .footer-copy {
 	color: var(--chrome-dark);
 	font-size: .8rem;
@@ -1379,7 +1399,11 @@ button {
 		flex-direction: column;
 		align-items: stretch;
 		gap: 0;
-		padding: 1rem 0;
+		padding: .5rem 0 1rem;
+		/* Scroll rather than clip on short or landscape phones. */
+		max-height: calc(100vh - var(--nav-h));
+		max-height: calc(100dvh - var(--nav-h));
+		overflow-y: auto;
 		transform: translateY(-120%);
 		/* visibility, not just opacity/pointer-events — otherwise all seven
 		   links stay in the tab order while the menu is visually closed, and a
@@ -1397,9 +1421,24 @@ button {
 		visibility: visible;
 	}
 
+	/* Full-width rows at least 52px tall, so a thumb lands on the intended
+	   section rather than its neighbour. */
 	.nav-links a {
-		padding: .75rem 2rem;
+		display: flex;
+		align-items: center;
+		min-height: 52px;
+		padding: .9rem clamp(16px, 4vw, 48px);
+		font-size: 1rem;
 		border-bottom: 1px solid var(--border);
+	}
+
+	.nav-links li:last-child a {
+		border-bottom: 0;
+	}
+
+	.nav-links a:active {
+		background: var(--black-3);
+		color: var(--red-light);
 	}
 
 	.nav-toggle {
@@ -1411,12 +1450,12 @@ button {
 	/* Stage 3: phone widths — the labeled buttons shrink to icon-only
 	   circles next to the hamburger. */
 	.nav-actions {
-		gap: .4rem;
+		gap: .75rem;
 	}
 
 	.nav-btn {
-		width: 40px;
-		height: 40px;
+		width: 44px;
+		height: 44px;
 		padding: 0;
 		border-radius: 50%;
 		gap: 0;
@@ -1480,6 +1519,54 @@ button {
 	border-bottom-color: var(--red);
 }
 
+/* Pricing's two-tier switch. Visitors read the underline tabs above as
+   headings and never found the Deluxe prices, so Pricing uses a filled pill:
+   the recognised "pick one of these" control. /instock keeps the plain tabs. */
+.tier-switch-label {
+	color: var(--text-muted);
+	font-size: .8rem;
+	letter-spacing: .08em;
+	text-transform: uppercase;
+	margin-bottom: .6rem;
+}
+
+.pricing-tabs--segmented {
+	display: inline-flex;
+	gap: .25rem;
+	max-width: 100%;
+	padding: .3rem;
+	margin-bottom: 1rem;
+	background: var(--black-3);
+	border: 1px solid var(--border);
+	border-radius: 999px;
+}
+
+.pricing-tabs--segmented .pricing-tab {
+	min-height: 44px;
+	padding: .7rem 1.4rem;
+	margin-bottom: 0;
+	border-bottom: 0;
+	border-radius: 999px;
+	color: var(--chrome);
+	cursor: pointer;
+	transition: background-color .2s, color .2s;
+}
+
+.pricing-tabs--segmented .pricing-tab:hover {
+	color: var(--chrome-light);
+	background: var(--black-4);
+}
+
+.pricing-tabs--segmented .pricing-tab.active {
+	color: #fff;
+	background: var(--red);
+}
+
+.pricing-tabs--segmented .pricing-tab:focus-visible {
+	outline: 2px solid var(--chrome-light);
+	outline-offset: 2px;
+}
+
 .pricing-pane {
 	display: none;
 }
@@ -1495,10 +1582,10 @@ button {
 	line-height: 1.6;
 }
 
-/* Sits directly under the pricing tabs. Deliberately quiet — the tables are
+/* Sits directly under the tier switch. Deliberately quiet — the tables are
    the section, and the flyer is the same information in a form you can carry. */
 .pricing-flyer {
-	margin: -1rem 0 1.5rem;
+	margin: 0 0 1.5rem;
 	font-size: .9rem;
 }
 
@@ -1766,6 +1853,34 @@ button {
 	.pricing-tab {
 		padding: .55rem .9rem;
 		font-size: .8rem;
+	}
+
+	/* Full width with equal halves, so both tiers are visibly the same kind
+	   of thing and "Deluxe Barn & Gable" can wrap instead of overflowing. */
+	.pricing-tabs--segmented {
+		display: flex;
+		width: 100%;
+	}
+
+	.pricing-tabs--segmented .pricing-tab {
+		flex: 1;
+		padding: .6rem .5rem;
+		font-size: .78rem;
+		letter-spacing: .03em;
+		line-height: 1.2;
+	}
+
+	/* Desktop cell padding made the tables ~40-70px wider than a phone, so
+	   the Quote button sat half off-screen behind a sideways scroll. */
+	.pricing-table th,
+	.pricing-table td,
+	.group-header td {
+		padding-left: .5rem;
+		padding-right: .5rem;
+	}
+
+	.pricing-table .btn-sm {
+		padding: .45rem .75rem;
 	}
 }
 

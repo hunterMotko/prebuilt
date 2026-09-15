@@ -3,10 +3,10 @@
 - 10x16x10: $5189
 - 10x20x10: $5689
 
-- 12x12x10: $5589
-- 12x16x10: $6089
-- 12x20x10: $6589
-- 12x24x10: $7089
+- 12x12x11: $5589
+- 12x16x11: $6089
+- 12x20x11: $6589
+- 12x24x11: $7089
 
 # Deluxe barns & gables
 - 10x12x11: $5789
@@ -14,10 +14,10 @@
 - 10x20x11: $6989
 
 - 12x12x11: $5989
-- 12x16x11: $6389
+- 12x16x11: $6589
 - 12x20x11: $7189
 - 12x24x11: $7789
-- 12x26x11: $8389
+- 12x28x11: $8389
 - 12x32x11: $8989
 
 - 14x20x11: $11189
@@ -49,17 +49,17 @@
 - 16 in on center 2x4 wall studs
 - smart siding
 - 2x6 rafters
-- 8x7 roll up door & 36in entry door
+- 8x7 roll up door & 36in entry door (entry door on 14 and 16 wide only)
 - premium steel roof with under laminate
 
-# 16x36x12 Deluxe Grambrel Barn 
+# 16x36x12 Deluxe Gambrel Barn
 - 5 4x4 PT runners
 - 3/4 in PT plywood sheathing
 - 12 in on center 2x4 pt floor joist
 - 16 in on center 2x4 wall studs
 - smart siding
 - 2x6 rafters
-- 8x7 roll up door & 36in entry door
+- 8x7 roll up door & 36in entry door (entry door on 14 and 16 wide only)
 - 1/2 loft
 - premium steel roof with under laminate
 
@@ -77,4 +77,14 @@
 - add loft/shelving: $4 per sq ft
 - heavy duty all treated ramp: $275 (6-7-8 x 4' or $325 8-9-10 x 4')
 - vinyl octagon gable vent 16in: $85
+- ridge skylight with venting: no price listed (call)
+- porch option, gable and gambrel buildings: no price listed (call)
+- many more options available
 
+# Delivery and terms
+- free delivery first 100 miles from Houghton Lake
+- "Mule" delivery for hard to get to locations
+- subject to 6% sales tax
+- prices subject to change
+- all buildings include 2 color paint
+- 20 premium steel colors; crinkle finish also available

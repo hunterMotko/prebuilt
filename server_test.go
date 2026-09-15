@@ -180,6 +180,59 @@ func TestPricingLinksToFlyer(t *testing.T) {
 	}
 }
 
+// The footer is on every public page, so a wrong Facebook URL or a missing
+// icon file would be broken site-wide.
+func TestFooterLinksToFacebook(t *testing.T) {
+	e := newTestServer(t, testConfig())
+
+	body := get(t, e, "/").Body.String()
+	if !strings.Contains(body, `href="https://www.facebook.com/PreBuiltShedsLLC/"`) {
+		t.Error("footer does not link to the business Facebook page")
+	}
+	const icon = "/public/images/facebook-icon.webp"
+	if !strings.Contains(body, `src="`+icon+`"`) {
+		t.Errorf("footer does not render the Facebook icon %s", icon)
+	}
+	if rec := get(t, e, icon); rec.Code != http.StatusOK {
+		t.Errorf("GET %s = %d, want 200", icon, rec.Code)
+	}
+}
+
+// Wall height is constant within a tier and already stated in each tier's
+// description, so the column cost phone width and told nobody anything (#14).
+func TestPricingDropsWallHeightColumn(t *testing.T) {
+	e := newTestServer(t, testConfig())
+
+	body := get(t, e, "/").Body.String()
+	if strings.Contains(body, "Wall Ht") {
+		t.Error("pricing tables still render the wall-height column")
+	}
+	for _, desc := range []string{"10&prime; wall height", "11&prime; wall height"} {
+		if !strings.Contains(body, desc) {
+			t.Errorf("tier description lost %q — the column's removal assumed it stays there", desc)
+		}
+	}
+}
+
+// The tier switch is announced as tabs, and main.js shows a pane by id. A tab
+// whose aria-controls names a missing pane would switch to nothing.
+func TestPricingTierSwitchTargetsExist(t *testing.T) {
+	e := newTestServer(t, testConfig())
+
+	body := get(t, e, "/").Body.String()
+	if !strings.Contains(body, `role="tablist"`) {
+		t.Error(`pricing tier switch is not marked role="tablist"`)
+	}
+	for _, pane := range []string{"tab-standard", "tab-deluxe"} {
+		if !strings.Contains(body, `aria-controls="`+pane+`"`) {
+			t.Errorf("no tab controls %s", pane)
+		}
+		if !strings.Contains(body, `id="`+pane+`"`) {
+			t.Errorf("pane %s is missing", pane)
+		}
+	}
+}
+
 // Echo's default error handler emits JSON, which rendered {"message":"Not
 // Found"} on a marketing site and got swapped into the page by htmx on a 429.
 func TestErrorsRenderHTMLNotJSON(t *testing.T) {
