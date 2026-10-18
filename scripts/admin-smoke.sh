@@ -133,8 +133,8 @@ check "GET /flyer"                  200 "$(status "${BASE}/flyer")"
 check "HEAD /flyer"                 200 "$(status -I "${BASE}/flyer")"
 flyer_ct="$(curl -s -o /dev/null -w '%{content_type}' "${BASE}/flyer" | cut -d';' -f1)"
 check "flyer content-type"          "text/html" "$flyer_ct"
-check "GET flyer-page-1.webp"       200 "$(status "${BASE}/public/images/flyer-page-1.webp")"
-check "GET flyer-page-2.webp"       200 "$(status "${BASE}/public/images/flyer-page-2.webp")"
+check "GET flyer-2026-page-1.webp"  200 "$(status "${BASE}/public/images/flyer-2026-page-1.webp")"
+check "GET flyer-2026-page-2.webp"  200 "$(status "${BASE}/public/images/flyer-2026-page-2.webp")"
 
 # Seam 3: attaching middleware to a group makes Echo auto-register a catch-all
 # RouteNotFound for that prefix, which once shadowed the static route and 404'd

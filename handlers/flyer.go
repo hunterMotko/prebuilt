@@ -25,13 +25,13 @@ type FlyerPage struct {
 // by a customer standing in the shop.
 var FlyerPages = []FlyerPage{
 	{
-		Src: "/public/images/flyer-page-1.webp", Width: 1600, Height: 2071,
+		Src: "/public/images/flyer-2026-page-1.webp", Width: 1600, Height: 2071,
 		Alt: "Flyer page 1: Standard Barn and Deluxe Barn & Gable price lists by size, " +
 			"with photos of barn sheds, a porch shed, a 14x28 deluxe gable garage, " +
 			"and a 16x36 deluxe gambrel barn.",
 	},
 	{
-		Src: "/public/images/flyer-page-2.webp", Width: 1600, Height: 1241,
+		Src: "/public/images/flyer-2026-page-2.webp", Width: 1600, Height: 1241,
 		Alt: "Flyer page 2: popular options and add-on prices, including roll-up " +
 			"garage doors, entry doors, windows, skylights, shutters, work benches, " +
 			"lofts, and ramps. Call Martin at (989) 387-9233 for an appointment.",
