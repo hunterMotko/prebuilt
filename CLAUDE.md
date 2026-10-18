@@ -100,7 +100,7 @@ The server is a single process with no hot-reload. When editing templates or CSS
 
 - **Images** — drop files into `public/images/` and replace `placeholder-img` divs with `<img src="/public/images/yourfile.jpg">`. Each placeholder has a `<!-- REPLACE: ... -->` comment explaining what shot fits.
 - **Pricing** — edit `templates/partials/pricing.html`; the pricing card structure is self-contained with a comment block at the top.
-- **Flyer** — `/flyer` shows the printed flyer as page images inside the normal site shell (`templates/flyer.html`); the PDF itself is not served. For a new flyer, run `scripts/render-flyer.sh path/to/flyer.pdf`, then update `FlyerPages` in `handlers/flyer.go` with the dimensions it prints. The `/flyer` path is printed on QR codes — never rename it.
+- **Flyer** — `/flyer` shows the printed flyer as page images inside the normal site shell (`templates/flyer.html`); the PDF itself is not served. For a new flyer, run `scripts/render-flyer.sh path/to/flyer.pdf <year>`, then update `FlyerPages` in `handlers/flyer.go` with the filenames and dimensions it prints. Page images are named `flyer-<year>-page-<n>.webp`, so a new flyer never overwrites the one it replaces. The `/flyer` path is printed on QR codes — never rename it.
 - **Phone / service area** — search for `(555) 000-0000` and `[City, State]` across `templates/` to fill in real contact info.
 
 ## Environment variables

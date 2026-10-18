@@ -16,6 +16,7 @@ data/
 # compression is lossy and irreversible, ignored because it is 4.5 MB of
 # binary that the site never serves — only the compressed copy ships.
 2025_flyer-original.pdf
+2026_flyer.pdf
 
 # Generated QR code for the printed flyer. Regenerable from the URL it encodes,
 # and a binary that would otherwise be re-added on every regeneration.
